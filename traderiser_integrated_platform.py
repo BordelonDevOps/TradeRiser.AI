@@ -29,15 +29,71 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize systems
-finance_database = IntegratedFinanceDatabase()
-portfolio_analyzer = PortfolioAnalyzer()
-crypto_trader = EnhancedCryptoTrader(finance_database=finance_database)
-backtest_solver = BacktestSolver(finance_database=finance_database)
-commodities_trader = CommoditiesTrader(finance_database=finance_database)
-etf_analyzer = ETFAnalyzer(finance_database=finance_database)
-alpaca_trader = AlpacaTrader()
-alpaca_mcp = AlpacaMCPIntegration()
+# Initialize systems with error handling
+finance_database = None
+portfolio_analyzer = None
+crypto_trader = None
+backtest_solver = None
+commodities_trader = None
+etf_analyzer = None
+alpaca_trader = None
+alpaca_mcp = None
+
+try:
+    finance_database = IntegratedFinanceDatabase()
+    logger.info("Finance database initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize finance database: {str(e)}")
+    finance_database = None
+
+try:
+    portfolio_analyzer = PortfolioAnalyzer()
+    logger.info("Portfolio analyzer initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize portfolio analyzer: {str(e)}")
+    portfolio_analyzer = None
+
+try:
+    crypto_trader = EnhancedCryptoTrader(finance_database=finance_database)
+    logger.info("Crypto trader initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize crypto trader: {str(e)}")
+    crypto_trader = None
+
+try:
+    backtest_solver = BacktestSolver(finance_database=finance_database)
+    logger.info("Backtest solver initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize backtest solver: {str(e)}")
+    backtest_solver = None
+
+try:
+    commodities_trader = CommoditiesTrader(finance_database=finance_database)
+    logger.info("Commodities trader initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize commodities trader: {str(e)}")
+    commodities_trader = None
+
+try:
+    etf_analyzer = ETFAnalyzer(finance_database=finance_database)
+    logger.info("ETF analyzer initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize ETF analyzer: {str(e)}")
+    etf_analyzer = None
+
+try:
+    alpaca_trader = AlpacaTrader()
+    logger.info("Alpaca trader initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Alpaca trader: {str(e)}")
+    alpaca_trader = None
+
+try:
+    alpaca_mcp = AlpacaMCPIntegration()
+    logger.info("Alpaca MCP integration initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Alpaca MCP integration: {str(e)}")
+    alpaca_mcp = None
 
 @app.route('/')
 def index():
@@ -89,6 +145,32 @@ def index():
         .negative { color: #f44336; }
         .neutral { color: #ff9800; }
         .input-section { background: #f8f9fa; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        
+        /* Beginner-friendly styles */
+        .beginner-section { background: #fff; border-radius: 15px; padding: 25px; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .beginner-section h3 { color: #333; margin-bottom: 20px; font-size: 1.4em; }
+        
+        .money-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .money-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; text-align: center; }
+        .big-number { font-size: 2em; font-weight: bold; margin-bottom: 5px; }
+        .card-label { font-size: 0.9em; opacity: 0.9; }
+        
+        .stock-table { background: #f8f9fa; border-radius: 10px; overflow: hidden; }
+        .table-header { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; background: #667eea; color: white; padding: 15px; font-weight: bold; }
+        .table-row { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; padding: 15px; border-bottom: 1px solid #eee; align-items: center; }
+        .table-row:hover { background: #f0f0f0; }
+        .stock-name { font-weight: bold; }
+        .stock-value { font-weight: 600; color: #333; }
+        .reasoning { font-size: 0.9em; color: #666; }
+        
+        .action-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .action-card { padding: 20px; border-radius: 12px; }
+        .action-card.positive { background: linear-gradient(135deg, #4CAF50, #45a049); color: white; }
+        .action-card.negative { background: linear-gradient(135deg, #f44336, #d32f2f); color: white; }
+        .action-card h4 { margin-bottom: 15px; }
+        .action-list { }
+        .action-item { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.2); }
+        .action-item:last-child { border-bottom: none; }
         .input-group { margin-bottom: 15px; }
         .input-group label { display: block; margin-bottom: 5px; color: #555; font-weight: 500; }
         .input-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 1rem; }
@@ -98,9 +180,9 @@ def index():
 <body>
     <div class="container">
         <div class="header">
-            <h1>📈 TradeRiser</h1>
-            <p>Professional Investment Analysis Platform</p>
-            <p><span class="status-indicator" style="background-color: #4CAF50; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;"></span>All Systems Online</p>
+            <h1>💰 TradeRiser</h1>
+            <p>Your Simple Guide to Making Money with Stocks</p>
+            <p><span class="status-indicator" style="background-color: #4CAF50; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;"></span>Ready to Help You Invest</p>
             
             <!-- SEC Compliance Notice -->
             <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 5px;">
@@ -114,70 +196,70 @@ def index():
         
         <div class="platform-grid">
             <div class="platform-card">
-                <h3>📊 Portfolio Analyzer</h3>
-                <p>Advanced portfolio analysis with risk metrics and performance attribution.</p>
+                <h3>💰 Smart Money Manager</h3>
+                <p>Get simple advice on your stocks - should you buy more, sell, or hold? Our AI makes it easy to understand.</p>
                 <ul class="feature-list">
-                    <li>Risk-return optimization</li>
-                    <li>Asset allocation analysis</li>
-                    <li>Performance attribution</li>
-                    <li>Sector analysis</li>
+                    <li>Easy buy/sell recommendations</li>
+                    <li>Plain English explanations</li>
+                    <li>See which stocks make you money</li>
+                    <li>Know when to take action</li>
                 </ul>
-                <button class="action-button" onclick="showPortfolioAnalyzer()">Analyze Portfolio</button>
+                <button class="action-button" onclick="showPortfolioAnalyzer()">Check My Stocks</button>
             </div>
             <div class="platform-card">
-                <h3>₿ Cryptocurrency</h3>
-                <p>Advanced cryptocurrency analysis with market sentiment.</p>
+                <h3>₿ Crypto Helper</h3>
+                <p>Should you buy Bitcoin, Ethereum, or other crypto? Get simple advice on digital currencies.</p>
                 <ul class="feature-list">
-                    <li>Major cryptocurrencies</li>
-                    <li>Market sentiment</li>
-                    <li>Technical analysis</li>
-                    <li>AML compliance</li>
+                    <li>Bitcoin & Ethereum analysis</li>
+                    <li>Market mood tracker</li>
+                    <li>Easy price predictions</li>
+                    <li>Safe trading tips</li>
                 </ul>
-                <button class="action-button" onclick="analyzeCrypto()">Analyze Crypto</button>
+                <button class="action-button" onclick="analyzeCrypto()">Check Crypto</button>
             </div>
             <div class="platform-card">
-                <h3>🔄 Backtest</h3>
-                <p>Optimize trade selection with sector and volatility constraints.</p>
+                <h3>🔄 Strategy Tester</h3>
+                <p>Test your investment ideas before risking real money. See how your strategy would have performed.</p>
                 <ul class="feature-list">
-                    <li>Optimal trade selection</li>
-                    <li>Sector diversification</li>
-                    <li>Volatility constraints</li>
-                    <li>Return maximization</li>
+                    <li>Test investment strategies</li>
+                    <li>See past performance</li>
+                    <li>Risk-free testing</li>
+                    <li>Learn what works</li>
                 </ul>
-                <button class="action-button" onclick="runBacktest()">Run Backtest</button>
+                <button class="action-button" onclick="runBacktest()">Test Strategy</button>
             </div>
             <div class="platform-card">
-                <h3>🥇 Commodities Trading</h3>
-                <p>Gold, oil, agriculture, and industrial metals analysis.</p>
+                <h3>🥇 Gold & Oil Tracker</h3>
+                <p>Should you invest in gold, oil, or other commodities? Get simple advice on real assets.</p>
                 <ul class="feature-list">
-                    <li>Precious metals analysis</li>
-                    <li>Energy commodities</li>
-                    <li>Agricultural futures</li>
-                    <li>Market screening</li>
+                    <li>Gold & silver prices</li>
+                    <li>Oil market trends</li>
+                    <li>Food commodity prices</li>
+                    <li>Easy market insights</li>
                 </ul>
-                <button class="action-button" onclick="analyzeCommodities()">Analyze Commodities</button>
+                <button class="action-button" onclick="analyzeCommodities()">Check Commodities</button>
             </div>
             <div class="platform-card">
-                <h3>📈 ETF Analysis</h3>
-                <p>Comprehensive ETF screening and comparison tools.</p>
+                <h3>📈 Fund Finder</h3>
+                <p>Find the best ETFs (investment funds) that match your goals. Compare fees and performance easily.</p>
                 <ul class="feature-list">
-                    <li>ETF screening</li>
-                    <li>Expense ratio analysis</li>
-                    <li>Performance comparison</li>
-                    <li>Sector allocation</li>
+                    <li>Find best funds</li>
+                    <li>Compare fees</li>
+                    <li>See performance</li>
+                    <li>Match your goals</li>
                 </ul>
-                <button class="action-button" onclick="analyzeETF()">Analyze ETFs</button>
+                <button class="action-button" onclick="analyzeETF()">Find Funds</button>
             </div>
             <div class="platform-card">
-                <h3>🦙 Alpaca Trading</h3>
-                <p>Live trading integration with risk management.</p>
+                <h3>🦙 Live Trading</h3>
+                <p>Ready to trade for real? Connect your brokerage account and start making actual trades safely.</p>
                 <ul class="feature-list">
-                    <li>Live account data</li>
-                    <li>Order management</li>
-                    <li>Position tracking</li>
-                    <li>Market data</li>
+                    <li>Real account connection</li>
+                    <li>Safe order placement</li>
+                    <li>Track your positions</li>
+                    <li>Live market prices</li>
                 </ul>
-                <button class="action-button" onclick="showAlpacaTrading()">Alpaca Trading</button>
+                <button class="action-button" onclick="showAlpacaTrading()">Start Trading</button>
             </div>
         </div>
         
@@ -189,8 +271,8 @@ def index():
         </div>
         
         <div class="footer">
-            <p>TradeRiser © 2025 - Professional Investment Analysis Platform</p>
-            <p>Real-time market data • Advanced financial modeling • Risk management</p>
+            <p>TradeRiser © 2025 - Your Simple Investment Helper</p>
+            <p>Live market data • Easy AI recommendations • Safe investing guidance</p>
         </div>
     </div>
     
@@ -199,16 +281,16 @@ def index():
             showResults('Portfolio Analysis');
             document.getElementById('results-content').innerHTML = `
                 <div class="input-section">
-                    <h4>Portfolio Input</h4>
+                    <h4>📊 Tell Me About Your Stocks</h4>
                     <div class="input-group">
-                        <label>Portfolio Tickers (comma-separated):</label>
+                        <label>What stocks do you own? (separate with commas):</label>
                         <input type="text" id="portfolio-tickers" placeholder="AAPL,MSFT,GOOGL,TSLA,SPY" value="AAPL,MSFT,GOOGL,TSLA,SPY">
                     </div>
                     <div class="input-group">
-                        <label>Weights (comma-separated, optional):</label>
+                        <label>How much of each? (optional - leave blank for equal amounts):</label>
                         <input type="text" id="portfolio-weights" placeholder="0.2,0.2,0.2,0.2,0.2">
                     </div>
-                    <button class="action-button" onclick="runPortfolioAnalysis()">Run Analysis</button>
+                    <button class="action-button" onclick="runPortfolioAnalysis()">🚀 Get My Investment Advice</button>
                 </div>
                 <div id="portfolio-results"></div>
             `;
@@ -251,36 +333,112 @@ def index():
         function displayPortfolioResults(data) {
             const summary = data.portfolio_summary || {};
             const risk = data.risk_analysis || {};
-            document.getElementById('portfolio-results').innerHTML = `
-                <div class="analysis-grid">
-                    <div class="analysis-card">
-                        <h4>Portfolio Summary</h4>
-                        <div class="metric">
-                            <span class="metric-label">Total Value:</span>
-                            <span class="metric-value">$${summary.total_portfolio_value?.toFixed(2) || 0}</span>
+            const aiRecs = data.ai_recommendations || {};
+            const insights = data.key_insights_for_beginners || {};
+            
+            // Create simplified portfolio overview
+            let portfolioHealth = "Good";
+            let healthColor = "positive";
+            if (insights.portfolio_health_score < 60) {
+                portfolioHealth = "Needs Attention";
+                healthColor = "negative";
+            } else if (insights.portfolio_health_score < 75) {
+                portfolioHealth = "Fair";
+                healthColor = "neutral";
+            }
+            
+            // Create stock table
+            let stockTableHTML = `
+                <div class="beginner-section">
+                    <h3>📊 Your Stocks - What Should You Do?</h3>
+                    <div class="stock-table">
+                        <div class="table-header">
+                            <div>Stock</div>
+                            <div>Your Investment</div>
+                            <div>AI Says</div>
+                            <div>Why?</div>
                         </div>
-                        <div class="metric">
-                            <span class="metric-label">Holdings:</span>
-                            <span class="metric-value">${summary.number_of_holdings || 0}</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Weighted P/E:</span>
-                            <span class="metric-value">${summary.weighted_pe_ratio?.toFixed(2) || 0}</span>
-                        </div>
+            `;
+            
+            // Add each stock to the table
+            Object.entries(aiRecs).forEach(([ticker, rec]) => {
+                const weight = data.portfolio_data?.[ticker]?.weight || 0;
+                const value = (summary.total_portfolio_value * weight).toFixed(0);
+                const recommendation = rec.recommendation || 'Hold';
+                const reasoning = rec.reasoning || 'Market analysis suggests holding position';
+                
+                let recColor = 'neutral';
+                let actionIcon = '⏸️';
+                if (recommendation.includes('Buy')) {
+                    recColor = 'positive';
+                    actionIcon = '🚀';
+                } else if (recommendation.includes('Sell')) {
+                    recColor = 'negative';
+                    actionIcon = '⚠️';
+                }
+                
+                stockTableHTML += `
+                    <div class="table-row">
+                        <div class="stock-name">${actionIcon} ${ticker}</div>
+                        <div class="stock-value">$${value}</div>
+                        <div class="recommendation ${recColor}">${recommendation}</div>
+                        <div class="reasoning">${reasoning.substring(0, 80)}...</div>
                     </div>
-                    <div class="analysis-card">
-                        <h4>Risk Analysis</h4>
-                        <div class="metric">
-                            <span class="metric-label">Volatility:</span>
-                            <span class="metric-value">${(risk.portfolio_volatility * 100)?.toFixed(2) || 0}%</span>
+                `;
+            });
+            
+            stockTableHTML += `
+                    </div>
+                </div>
+            `;
+            
+            // Create simple summary
+            const simpleSummary = `
+                <div class="beginner-section">
+                    <h3>💰 Your Money Summary</h3>
+                    <div class="money-cards">
+                        <div class="money-card">
+                            <div class="big-number">$${summary.total_portfolio_value?.toFixed(0) || 0}</div>
+                            <div class="card-label">Total Investment Value</div>
                         </div>
-                        <div class="metric">
-                            <span class="metric-label">Sharpe Ratio:</span>
-                            <span class="metric-value ${risk.sharpe_ratio_estimate > 1 ? 'positive' : 'neutral'}">${risk.sharpe_ratio_estimate?.toFixed(3) || 0}</span>
+                        <div class="money-card">
+                            <div class="big-number ${healthColor}">${portfolioHealth}</div>
+                            <div class="card-label">Portfolio Health</div>
+                        </div>
+                        <div class="money-card">
+                            <div class="big-number">${summary.number_of_holdings || 0}</div>
+                            <div class="card-label">Different Stocks</div>
                         </div>
                     </div>
                 </div>
             `;
+            
+            // Create action guidance
+            const actionGuidance = `
+                <div class="beginner-section">
+                    <h3>🎯 What You Should Do Next</h3>
+                    <div class="action-cards">
+                        <div class="action-card positive">
+                            <h4>🚀 Stocks to Buy More Of</h4>
+                            <div class="action-list">
+                                ${Object.entries(aiRecs).filter(([_, rec]) => rec.recommendation?.includes('Buy')).map(([ticker, _]) => 
+                                    `<div class="action-item">• ${ticker} - Good opportunity to invest more</div>`
+                                ).join('') || '<div class="action-item">No strong buy signals right now</div>'}
+                            </div>
+                        </div>
+                        <div class="action-card negative">
+                            <h4>⚠️ Stocks to Consider Selling</h4>
+                            <div class="action-list">
+                                ${Object.entries(aiRecs).filter(([_, rec]) => rec.recommendation?.includes('Sell')).map(([ticker, _]) => 
+                                    `<div class="action-item">• ${ticker} - Consider reducing position</div>`
+                                ).join('') || '<div class="action-item">All stocks look okay to keep</div>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('portfolio-results').innerHTML = simpleSummary + stockTableHTML + actionGuidance;
         }
         
         function analyzeCrypto() {
@@ -844,6 +1002,10 @@ def index():
 def analyze_portfolio():
     """Portfolio analysis endpoint"""
     try:
+        if portfolio_analyzer is None:
+            logger.error("Portfolio analyzer not available")
+            return jsonify({'error': 'Portfolio analyzer module not available'}), 503
+            
         data = request.get_json()
         if not data:
             logger.error("No JSON data provided for portfolio analysis")
@@ -876,6 +1038,10 @@ def analyze_portfolio():
 def analyze_crypto_api():
     """Cryptocurrency analysis endpoint"""
     try:
+        if crypto_trader is None:
+            logger.error("Crypto trader not available")
+            return jsonify({'error': 'Crypto trader module not available'}), 503
+            
         analysis = crypto_trader.analyze_crypto_market()
         if not analysis:
             logger.warning("No crypto analysis results returned")
@@ -895,6 +1061,10 @@ def analyze_crypto_api():
 def run_backtest():
     """Backtest endpoint for optimal trade selection"""
     try:
+        if backtest_solver is None:
+            logger.error("Backtest solver not available")
+            return jsonify({'error': 'Backtest solver module not available'}), 503
+            
         trades = backtest_solver.select_trades()
         if not trades:
             logger.warning("No trades selected in backtest")

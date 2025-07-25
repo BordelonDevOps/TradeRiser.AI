@@ -10,8 +10,10 @@ import redis
 from alpha_vantage.fundamentaldata import FundamentalData
 from alpha_vantage.timeseries import TimeSeries
 from pytrends.request import TrendReq
-import tweepy
 from textblob import TextBlob
+import requests
+from bs4 import BeautifulSoup
+import re
 from ratelimit import limits, sleep_and_retry
 import logging
 
@@ -37,24 +39,9 @@ class APIClient:
             self.in_memory_cache = {}
         self.alpha_vantage_key = os.getenv('ALPHA_VANTAGE_API_KEY')
         
-        # Twitter API setup (optional)
-        twitter_api_key = os.getenv('TWITTER_API_KEY')
-        twitter_api_secret = os.getenv('TWITTER_API_SECRET')
-        twitter_access_token = os.getenv('TWITTER_ACCESS_TOKEN')
-        twitter_access_token_secret = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
-        
-        if all([twitter_api_key, twitter_api_secret, twitter_access_token, twitter_access_token_secret]):
-            self.twitter_auth = tweepy.OAuthHandler(twitter_api_key, twitter_api_secret)
-            self.twitter_auth.set_access_token(twitter_access_token, twitter_access_token_secret)
-            self.twitter_api = tweepy.API(self.twitter_auth, wait_on_rate_limit=True)
-            self.twitter_enabled = True
-        else:
-            self.twitter_api = None
-            self.twitter_enabled = False
-            # Only show warning once across all instances
-            if not APIClient._twitter_warning_shown:
-                print("Warning: Twitter API credentials not found. Twitter sentiment analysis disabled.")
-                APIClient._twitter_warning_shown = True
+        # Alternative sentiment analysis setup (no API keys required)
+        self.sentiment_enabled = True
+        self.logger.info("Alternative sentiment analysis initialized")
         
         self.pytrends = TrendReq()
 
@@ -154,26 +141,45 @@ class APIClient:
             raise
 
     @sleep_and_retry
-    @limits(calls=10, period=60)  # Twitter: conservative limit
-    def get_twitter_sentiment(self, query: str) -> float:
-        """Calculate sentiment score from Twitter data"""
-        if not self.twitter_enabled:
-            self.logger.warning("Twitter API not configured, returning neutral sentiment")
-            return 0.5
-        
-        cache_key = f"twitter_sentiment:{query}"
+    @limits(calls=10, period=60)  # Conservative limit for web scraping
+    def get_social_sentiment(self, query: str) -> float:
+        """Calculate sentiment score from multiple sources using web scraping"""
+        cache_key = f"social_sentiment:{query}"
         cached = self._cache_get(cache_key)
         if cached:
             return float(cached)
+        
         try:
-            tweets = self.twitter_api.search_tweets(q=query, count=50, lang='en')
-            sentiment_score = sum(TextBlob(tweet.text).sentiment.polarity for tweet in tweets) / max(len(tweets), 1) * 0.5 + 0.5
-            self._cache_set(cache_key, sentiment_score, 3600)  # Cache for 1 hour
-            self.logger.info(f"Fetched Twitter sentiment for {query}")
-            return sentiment_score
+            sentiment_scores = []
+            
+            # Method 1: Reddit sentiment scraping
+            reddit_sentiment = self._scrape_reddit_sentiment(query)
+            if reddit_sentiment is not None:
+                sentiment_scores.append(reddit_sentiment)
+            
+            # Method 2: News headlines sentiment
+            news_sentiment = self._scrape_news_sentiment(query)
+            if news_sentiment is not None:
+                sentiment_scores.append(news_sentiment)
+            
+            # Method 3: Yahoo Finance discussions
+            yahoo_sentiment = self._scrape_yahoo_discussions(query)
+            if yahoo_sentiment is not None:
+                sentiment_scores.append(yahoo_sentiment)
+            
+            # Calculate average sentiment or return neutral if no data
+            if sentiment_scores:
+                final_sentiment = sum(sentiment_scores) / len(sentiment_scores)
+            else:
+                final_sentiment = 0.5  # Neutral sentiment
+            
+            self._cache_set(cache_key, final_sentiment, 3600)  # Cache for 1 hour
+            self.logger.info(f"Calculated social sentiment for {query}: {final_sentiment}")
+            return final_sentiment
+            
         except Exception as e:
-            self.logger.error(f"Error fetching Twitter sentiment for {query}: {str(e)}")
-            raise
+            self.logger.error(f"Error calculating social sentiment for {query}: {str(e)}")
+            return 0.5  # Return neutral sentiment on error
 
     @sleep_and_retry
     @limits(calls=10, period=60)  # pytrends: conservative limit
@@ -213,3 +219,105 @@ class APIClient:
         except Exception as e:
             self.logger.error(f"Error fetching FRED data for {series_id}: {str(e)}")
             raise
+
+    def _scrape_reddit_sentiment(self, query: str) -> float:
+        """Scrape Reddit sentiment for a given query"""
+        try:
+            # Use Reddit's JSON API (no authentication required for public posts)
+            url = f"https://www.reddit.com/search.json?q={query}&sort=hot&limit=25"
+            headers = {'User-Agent': 'TradeRiser/1.0'}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                return None
+                
+            data = response.json()
+            posts = data.get('data', {}).get('children', [])
+            
+            if not posts:
+                return None
+                
+            sentiments = []
+            for post in posts:
+                post_data = post.get('data', {})
+                title = post_data.get('title', '')
+                selftext = post_data.get('selftext', '')
+                
+                # Analyze sentiment of title and text
+                text_to_analyze = f"{title} {selftext}"
+                if text_to_analyze.strip():
+                    sentiment = TextBlob(text_to_analyze).sentiment.polarity
+                    sentiments.append(sentiment)
+            
+            if sentiments:
+                # Convert from [-1, 1] to [0, 1] scale
+                avg_sentiment = sum(sentiments) / len(sentiments)
+                return (avg_sentiment + 1) / 2
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error scraping Reddit sentiment: {str(e)}")
+            return None
+    
+    def _scrape_news_sentiment(self, query: str) -> float:
+        """Scrape news headlines sentiment using Google News"""
+        try:
+            # Use Google News RSS feed
+            url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+            headers = {'User-Agent': 'TradeRiser/1.0'}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                return None
+                
+            # Parse RSS feed
+            soup = BeautifulSoup(response.content, 'xml')
+            items = soup.find_all('item')
+            
+            if not items:
+                return None
+                
+            sentiments = []
+            for item in items[:20]:  # Limit to first 20 headlines
+                title = item.find('title')
+                if title and title.text:
+                    sentiment = TextBlob(title.text).sentiment.polarity
+                    sentiments.append(sentiment)
+            
+            if sentiments:
+                # Convert from [-1, 1] to [0, 1] scale
+                avg_sentiment = sum(sentiments) / len(sentiments)
+                return (avg_sentiment + 1) / 2
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error scraping news sentiment: {str(e)}")
+            return None
+    
+    def _scrape_yahoo_discussions(self, query: str) -> float:
+        """Scrape Yahoo Finance discussions for sentiment"""
+        try:
+            # Yahoo Finance conversations API
+            url = f"https://query1.finance.yahoo.com/v1/finance/search?q={query}"
+            headers = {'User-Agent': 'TradeRiser/1.0'}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                return None
+                
+            data = response.json()
+            quotes = data.get('quotes', [])
+            
+            if not quotes:
+                return None
+            
+            # For now, return neutral sentiment as Yahoo Finance discussions
+            # require more complex scraping. This is a placeholder.
+            # In a real implementation, you'd scrape the actual discussion pages
+            return 0.5
+            
+        except Exception as e:
+            self.logger.error(f"Error scraping Yahoo discussions: {str(e)}")
+            return None
