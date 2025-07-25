@@ -10,6 +10,7 @@ from Utils.utils_api_client import APIClient
 import logging
 import os
 import yfinance as yf
+from quant_strategies import QuantStrategies
 # AI/ML Libraries
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor
 from sklearn.preprocessing import StandardScaler
@@ -31,6 +32,7 @@ class PortfolioAnalyzer:
         self.api_client = APIClient()
         self.logger = logging.getLogger(__name__)
         self.risk_free_rate = 0.045
+        self.quant_strategies = QuantStrategies()
         self.base_urls = {
             'yahoo_summary': 'https://query1.finance.yahoo.com/v10/finance/quoteSummary',
             'yahoo_chart': 'https://query1.finance.yahoo.com/v8/finance/chart'
@@ -92,6 +94,14 @@ class PortfolioAnalyzer:
                 ai_recommendations = {}
                 beginner_insights = {}
             
+            # Generate quantitative strategies analysis
+            try:
+                quant_analysis = self._analyze_quantitative_strategies(portfolio_data)
+                self.logger.info(f"Quantitative strategies analysis completed for {len(portfolio_data)} stocks")
+            except Exception as e:
+                self.logger.error(f"Error generating quantitative strategies analysis: {str(e)}")
+                quant_analysis = {}
+            
             analysis = {
                 'portfolio_summary': self._calculate_portfolio_summary(portfolio_data, nav),
                 'fundamental_analysis': self._analyze_portfolio_fundamentals(portfolio_data),
@@ -99,6 +109,7 @@ class PortfolioAnalyzer:
                 'risk_analysis': self._analyze_portfolio_risk(portfolio_data),
                 'macro_analysis': self._analyze_macro_environment(portfolio_data),
                 'sector_analysis': self._analyze_sector_allocation(portfolio_data),
+                'quantitative_strategies': quant_analysis,
                 'ai_recommendations': ai_recommendations,
                 'key_insights_for_beginners': beginner_insights,
                 'generated_at': datetime.now().isoformat()
@@ -1084,3 +1095,88 @@ class PortfolioAnalyzer:
         ])
         
         return tips[:5]  # Limit to 5 tips
+    
+    def _analyze_quantitative_strategies(self, portfolio_data: Dict) -> Dict:
+        """Analyze portfolio using quantitative trading strategies"""
+        try:
+            quant_analysis = {
+                'strategy_signals': {},
+                'portfolio_recommendation': {},
+                'strategy_descriptions': self.quant_strategies.get_strategy_descriptions(),
+                'analysis_summary': ''
+            }
+            
+            # Analyze each ticker with quantitative strategies
+            all_signals = []
+            ticker_results = {}
+            
+            for ticker in portfolio_data.keys():
+                try:
+                    result = self.quant_strategies.analyze_ticker(ticker)
+                    if result:
+                        ticker_results[ticker] = result
+                        all_signals.append(result['overall_signal'])
+                        self.logger.info(f"Quantitative analysis completed for {ticker}")
+                    else:
+                        self.logger.warning(f"No quantitative analysis data for {ticker}")
+                except Exception as e:
+                    self.logger.error(f"Error analyzing {ticker} with quant strategies: {str(e)}")
+                    continue
+            
+            quant_analysis['strategy_signals'] = ticker_results
+            
+            # Calculate portfolio-level recommendation
+            if all_signals:
+                avg_signal = np.mean(all_signals)
+                signal_std = np.std(all_signals)
+                
+                if avg_signal > 0.6:
+                    portfolio_action = "BUY"
+                    confidence = min(95, 60 + (avg_signal - 0.6) * 87.5)
+                elif avg_signal < 0.4:
+                    portfolio_action = "SELL"
+                    confidence = min(95, 60 + (0.4 - avg_signal) * 87.5)
+                else:
+                    portfolio_action = "HOLD"
+                    confidence = max(50, 80 - signal_std * 100)
+                
+                quant_analysis['portfolio_recommendation'] = {
+                    'action': portfolio_action,
+                    'confidence': round(confidence, 1),
+                    'signal_strength': round(avg_signal, 3),
+                    'signal_consistency': round(1 - signal_std, 3)
+                }
+                
+                # Generate analysis summary
+                num_analyzed = len(ticker_results)
+                buy_signals = sum(1 for result in ticker_results.values() 
+                                if result['overall_recommendation'] == 'BUY')
+                sell_signals = sum(1 for result in ticker_results.values() 
+                                 if result['overall_recommendation'] == 'SELL')
+                hold_signals = num_analyzed - buy_signals - sell_signals
+                
+                summary = f"📊 **Quantitative Analysis**: Analyzed {num_analyzed} stocks using 5 technical strategies. "
+                summary += f"**Signals**: {buy_signals} BUY, {hold_signals} HOLD, {sell_signals} SELL. "
+                summary += f"**Portfolio Recommendation**: {portfolio_action} (Confidence: {confidence:.1f}%). "
+                
+                if signal_std < 0.2:
+                    summary += "Strong signal consistency across holdings."
+                elif signal_std < 0.4:
+                    summary += "Moderate signal consistency - mixed opportunities."
+                else:
+                    summary += "Low signal consistency - careful position sizing recommended."
+                
+                quant_analysis['analysis_summary'] = summary
+            else:
+                quant_analysis['analysis_summary'] = "⚠️ Unable to generate quantitative analysis - insufficient data."
+            
+            return quant_analysis
+            
+        except Exception as e:
+            self.logger.error(f"Error in quantitative strategies analysis: {str(e)}")
+            return {
+                'strategy_signals': {},
+                'portfolio_recommendation': {},
+                'strategy_descriptions': {},
+                'analysis_summary': '⚠️ Quantitative analysis unavailable due to technical issues.'
+            }

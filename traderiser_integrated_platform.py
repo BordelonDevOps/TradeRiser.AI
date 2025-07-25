@@ -189,6 +189,35 @@ def index():
         .input-group { margin-bottom: 15px; }
         .input-group label { display: block; margin-bottom: 5px; color: #555; font-weight: 500; }
         .input-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 1rem; }
+        
+        /* Quantitative Strategies Styles */
+        .quant-summary { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea; }
+        .portfolio-recommendation { margin: 20px 0; }
+        .rec-card { padding: 20px; border-radius: 12px; text-align: center; }
+        .rec-card.buy { background: linear-gradient(135deg, #4CAF50, #45a049); color: white; }
+        .rec-card.sell { background: linear-gradient(135deg, #f44336, #d32f2f); color: white; }
+        .rec-card.hold { background: linear-gradient(135deg, #ff9800, #f57c00); color: white; }
+        .confidence-bar { position: relative; background: rgba(255,255,255,0.3); height: 25px; border-radius: 12px; margin: 15px 0; overflow: hidden; }
+        .confidence-fill { height: 100%; background: rgba(255,255,255,0.8); border-radius: 12px; transition: width 0.3s ease; }
+        .confidence-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 0.9em; }
+        .signal-metrics { display: flex; justify-content: space-around; margin-top: 15px; font-size: 0.9em; }
+        .strategy-details { margin-top: 25px; }
+        .strategy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-top: 15px; }
+        .strategy-card { background: #f8f9fa; border-radius: 10px; padding: 15px; border: 1px solid #e9ecef; }
+        .strategy-card h5 { color: #333; margin-bottom: 10px; text-align: center; }
+        .overall-signal { text-align: center; padding: 8px; border-radius: 6px; font-weight: bold; margin-bottom: 15px; }
+        .overall-signal.buy { background: #4CAF50; color: white; }
+        .overall-signal.sell { background: #f44336; color: white; }
+        .overall-signal.hold { background: #ff9800; color: white; }
+        .strategy-breakdown { }
+        .strategy-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee; }
+        .strategy-item:last-child { border-bottom: none; }
+        .strategy-name { color: #666; font-size: 0.85em; }
+        .strategy-signal { font-weight: bold; font-size: 0.85em; }
+        .strategy-signal.buy { color: #4CAF50; }
+        .strategy-signal.sell { color: #f44336; }
+        .strategy-signal.hold { color: #ff9800; }
+        
         .footer { text-align: center; margin-top: 50px; color: white; opacity: 0.8; }
     </style>
 </head>
@@ -380,6 +409,7 @@ def index():
             const risk = data.risk_analysis || {};
             const aiRecs = data.ai_recommendations || {};
             const insights = data.key_insights_for_beginners || {};
+            const quantStrategies = data.quantitative_strategies || {};
             
             // Create simplified portfolio overview
             let portfolioHealth = "Good";
@@ -494,7 +524,63 @@ def index():
                 </div>
             `;
             
-            document.getElementById('portfolio-results').innerHTML = simpleSummary + stockTableHTML + actionGuidance;
+            // Create quantitative strategies section
+            let quantSection = '';
+            if (quantStrategies.analysis_summary) {
+                const portfolioRec = quantStrategies.portfolio_recommendation || {};
+                const strategySignals = quantStrategies.strategy_signals || {};
+                
+                quantSection = `
+                    <div class="beginner-section">
+                        <h3>📊 Technical Trading Signals</h3>
+                        <div class="quant-summary">
+                            <p>${quantStrategies.analysis_summary}</p>
+                        </div>
+                        
+                        ${portfolioRec.action ? `
+                        <div class="portfolio-recommendation">
+                            <div class="rec-card ${portfolioRec.action.toLowerCase()}">
+                                <h4>Overall Portfolio Signal: ${portfolioRec.action}</h4>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" style="width: ${portfolioRec.confidence || 0}%"></div>
+                                    <span class="confidence-text">${portfolioRec.confidence || 0}% Confidence</span>
+                                </div>
+                                <div class="signal-metrics">
+                                    <span>Signal Strength: ${(portfolioRec.signal_strength * 100).toFixed(1)}%</span>
+                                    <span>Consistency: ${(portfolioRec.signal_consistency * 100).toFixed(1)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        ${Object.keys(strategySignals).length > 0 ? `
+                        <div class="strategy-details">
+                            <h4>Individual Stock Signals</h4>
+                            <div class="strategy-grid">
+                                ${Object.entries(strategySignals).map(([ticker, signals]) => `
+                                    <div class="strategy-card">
+                                        <h5>${ticker}</h5>
+                                        <div class="overall-signal ${signals.overall_recommendation?.toLowerCase() || 'hold'}">
+                                            ${signals.overall_recommendation || 'HOLD'}
+                                        </div>
+                                        <div class="strategy-breakdown">
+                                            ${Object.entries(signals.individual_strategies || {}).map(([strategy, result]) => `
+                                                <div class="strategy-item">
+                                                    <span class="strategy-name">${strategy}:</span>
+                                                    <span class="strategy-signal ${result.signal?.toLowerCase() || 'hold'}">${result.signal || 'HOLD'}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            document.getElementById('portfolio-results').innerHTML = simpleSummary + stockTableHTML + actionGuidance + quantSection;
         }
         
         function analyzeCrypto() {
