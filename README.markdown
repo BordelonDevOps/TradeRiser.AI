@@ -65,10 +65,46 @@ chmod +x setup.sh
    # Optional: TWITTER_API_KEY, FRED_API_KEY
    ```
 
-5. **Get API Keys**:
-   - **Alpha Vantage** (Required): [Get free key](https://www.alphavantage.co/support/#api-key)
-   - **Twitter** (Optional): [Developer Portal](https://developer.twitter.com/)
-   - **FRED** (Optional): [Economic Data API](https://fred.stlouisfed.org/docs/api/api_key.html)
+5. **API Configuration**:
+
+   The platform supports both **Free** and **Pro** subscription tiers:
+
+   ### Free Tier (Default)
+   Includes access to essential APIs with no cost:
+   - **Alpha Vantage API** - Stock data and fundamentals
+   - **FRED API** - Economic indicators
+   - **Yahoo Finance** - Real-time stock data (via yfinance)
+   - **CoinGecko** - Cryptocurrency data
+
+   ### Pro Tier
+   Unlocks premium APIs for enhanced analysis:
+   - **Twitter API** - Social sentiment analysis
+   - **Quandl API** - Alternative financial data
+   - **Financial Modeling Prep** - Advanced fundamentals
+   - **IEX Cloud** - Real-time market data
+   - **Alpaca Trading** - Live trading capabilities
+
+   ### Configuration
+   1. Set `SUBSCRIPTION_TIER=free` or `SUBSCRIPTION_TIER=pro` in `.env`
+   2. Add your API keys:
+
+   **Free Tier APIs:**
+   ```
+   ALPHA_VANTAGE_API_KEY=your_key_here
+   FRED_API_KEY=your_key_here
+   ```
+
+   **Pro Tier APIs (optional):**
+   ```
+   TWITTER_API_KEY=your_key_here
+   QUANDL_API_KEY=your_key_here
+   FMP_API_KEY=your_key_here
+   IEX_CLOUD_API_KEY=your_key_here
+   ALPACA_API_KEY=your_key_here
+   ALPACA_SECRET_KEY=your_secret_here
+   ```
+
+   **Note:** The platform works fully with free APIs only. Pro APIs enhance analysis but are not required.
 
 6. **Run Application**:
    ```bash

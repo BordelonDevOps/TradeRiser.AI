@@ -36,21 +36,52 @@ class PortfolioAnalyzer:
             'yahoo_chart': 'https://query1.finance.yahoo.com/v8/finance/chart'
         }
 
-    def analyze_portfolio(self, holdings: Dict[str, float], nav: float = 100000) -> Dict:
-        """Analyze portfolio using real data"""
+    def analyze_portfolio(self, holdings: Dict[str, any], nav: float = 100000) -> Dict:
+        """Analyze portfolio using real data with share quantities or weights"""
         try:
-            if not self._validate_portfolio(holdings):
-                self.logger.error("Invalid portfolio weights")
-                return {'error': 'Invalid portfolio weights'}
+            # Check if holdings contains shares or weights
             portfolio_data = {}
-            for ticker, weight in holdings.items():
+            total_value = 0
+            
+            # First pass: get stock data and calculate total value
+            failed_tickers = []
+            for ticker, quantity in holdings.items():
                 stock_data = self._fetch_stock_data(ticker)
                 if stock_data:
-                    stock_data['weight'] = weight
+                    current_price = stock_data['technical_data'].get('current_price', 0)
+                    
+                    # Handle both share quantities and weights
+                    if isinstance(quantity, dict) and 'shares' in quantity:
+                        shares = quantity['shares']
+                        position_value = shares * current_price
+                    elif quantity > 0 and quantity <= 1 and sum(holdings.values()) <= 1.1:
+                        # Treat as weight if all values are <= 1 and sum ~= 1
+                        shares = int((nav * quantity) / max(current_price, 1))
+                        position_value = shares * current_price
+                        stock_data['weight'] = quantity
+                    else:
+                        # Treat as share quantity
+                        shares = int(quantity)
+                        position_value = shares * current_price
+                    
+                    stock_data['shares'] = shares
+                    stock_data['position_value'] = position_value
+                    total_value += position_value
                     portfolio_data[ticker] = stock_data
+                else:
+                    failed_tickers.append(ticker)
+            
+            # Second pass: calculate weights based on actual values
+            for ticker, data in portfolio_data.items():
+                if 'weight' not in data:
+                    data['weight'] = data['position_value'] / total_value if total_value > 0 else 0
             if not portfolio_data:
                 self.logger.error("No valid stock data found")
-                return {'error': 'No valid stock data found'}
+                return {
+                    'error': 'No valid stock data found',
+                    'failed_tickers': failed_tickers,
+                    'message': 'All requested stocks failed to load data. This may be due to API limitations or unavailable data.'
+                }
             try:
                 ai_recommendations = self._generate_ai_recommendations(portfolio_data)
                 beginner_insights = self._generate_beginner_insights(portfolio_data)
@@ -72,6 +103,14 @@ class PortfolioAnalyzer:
                 'key_insights_for_beginners': beginner_insights,
                 'generated_at': datetime.now().isoformat()
             }
+            
+            # Add warning if some tickers failed
+            if failed_tickers:
+                analysis['warnings'] = {
+                    'failed_tickers': failed_tickers,
+                    'message': f'Data unavailable for: {", ".join(failed_tickers)}. Analysis based on available data only.'
+                }
+            
             self.logger.info("Portfolio analysis completed")
             return analysis
         except Exception as e:
@@ -93,19 +132,24 @@ class PortfolioAnalyzer:
             technical_data = self._fetch_technical_data(ticker)
             alternative_data = self._fetch_alternative_data(ticker)
             
+            # Skip if essential data is unavailable
+            if not fundamental_data or not technical_data:
+                self.logger.warning(f"Essential data unavailable for {ticker}")
+                return None
+            
             data = {
                 'ticker': ticker,
                 'company_name': fundamental_data.get('company_name', ticker),
                 'sector': fundamental_data.get('sector', 'Unknown'),
                 'fundamental_data': fundamental_data,
                 'technical_data': technical_data,
-                'alternative_data': alternative_data
+                'alternative_data': alternative_data or {'social_sentiment_score': 0.5, 'google_trends_score': 0.5, 'news_sentiment': 'Neutral'}
             }
             self.logger.info(f"Fetched stock data for {ticker}")
             return data
         except Exception as e:
             self.logger.error(f"Error fetching data for {ticker}: {str(e)}")
-            return {}
+            return None
 
     def _fetch_technical_data(self, ticker: str) -> Dict:
         """Fetch technical data using yfinance library"""
@@ -121,12 +165,7 @@ class PortfolioAnalyzer:
             
             if hist.empty or len(hist) < 50:
                 self.logger.warning(f"Insufficient technical data for {ticker}")
-                return {
-                    'current_price': 100,  # Default price
-                    'price_change_1m': 0,
-                    'rsi': 50,
-                    'historical_volatility_30d': 0.2
-                }
+                return None  # Return None when insufficient data - no placeholder data
                 
             closes = hist['Close'].values
             current_price = float(closes[-1])
@@ -143,12 +182,7 @@ class PortfolioAnalyzer:
             return result
         except Exception as e:
             self.logger.error(f"Error fetching yfinance technical data for {ticker}: {str(e)}")
-            return {
-                'current_price': 100,  # Default price
-                'price_change_1m': 0,
-                'rsi': 50,
-                'historical_volatility_30d': 0.2
-            }
+            return None  # Return None when data is unavailable - no placeholder data
 
     def _fetch_yahoo_fundamentals(self, ticker: str) -> Dict:
         """Fetch fundamental data using yfinance library"""
@@ -180,19 +214,8 @@ class PortfolioAnalyzer:
             return result
         except Exception as e:
             self.logger.error(f"Error fetching yfinance fundamentals for {ticker}: {str(e)}")
-            # Return default values if API fails
-            return {
-                'eps_trailing': 0,
-                'pe_ratio': 15,  # Default P/E
-                'revenue': 1000000,  # Default revenue
-                'market_cap': 10000000,  # Default market cap
-                'dividend_yield': 0.02,
-                'beta': 1.0,
-                'profit_margin': 0.1,
-                'company_name': ticker,
-                'sector': 'Technology',
-                'last_updated': datetime.now().isoformat()
-            }
+            # Return None to indicate data unavailable - no placeholder data
+            return None
 
     def _fetch_alternative_data(self, ticker: str) -> Dict:
         """Fetch alternative data from social media and Google Trends"""
@@ -204,7 +227,7 @@ class PortfolioAnalyzer:
             }
         except Exception as e:
             self.logger.error(f"Error fetching alternative data for {ticker}: {str(e)}")
-            return {'social_sentiment_score': 0.5, 'google_trends_score': 0.5, 'news_sentiment': 'Neutral'}
+            return None  # Return None when data is unavailable - no placeholder data
 
     def _analyze_macro_environment(self, portfolio_data: Dict) -> Dict:
         """Analyze macro environment with FRED data"""
@@ -219,28 +242,38 @@ class PortfolioAnalyzer:
                     'macro_risk_score': min(1.0, (cpi / 100 + interest_rate / 100))
                 }
             else:
-                # Use default values when FRED API is not available
-                return {
-                    'interest_rate_sensitivity': 'Medium',
-                    'inflation_sensitivity': 'Medium', 
-                    'macro_risk_score': 0.5
-                }
+                # Return None when FRED API is not available - no placeholder data
+                return None
         except Exception as e:
             self.logger.error(f"Error analyzing macro environment: {str(e)}")
-            return {'macro_risk_score': 0.5}
+            return None
 
     def _calculate_portfolio_summary(self, portfolio_data: Dict, nav: float) -> Dict:
-        """Calculate portfolio summary metrics"""
+        """Calculate portfolio summary metrics with actual share quantities"""
         total_value = 0
         weighted_pe = 0
+        holdings_detail = []
+        
         for ticker, data in portfolio_data.items():
             weight = data['weight']
             current_price = data['technical_data'].get('current_price', 0)
-            shares = (nav * weight) / max(current_price, 1)
-            total_value += shares * current_price
+            shares = data.get('shares', int((nav * weight) / max(current_price, 1)))
+            position_value = data.get('position_value', shares * current_price)
+            
+            total_value += position_value
             weighted_pe += data['fundamental_data'].get('pe_ratio', 0) * weight
+            
+            holdings_detail.append({
+                'ticker': ticker,
+                'shares': shares,
+                'current_price': current_price,
+                'position_value': position_value,
+                'weight': weight,
+                'company_name': data.get('company_name', ticker)
+            })
         return {
             'total_portfolio_value': total_value,
+            'holdings_detail': holdings_detail,
             'number_of_holdings': len(portfolio_data),
             'weighted_pe_ratio': weighted_pe
         }
@@ -929,8 +962,8 @@ class PortfolioAnalyzer:
             
         except Exception as e:
             self.logger.error(f"Error generating ML portfolio summary: {str(e)}")
-            # Fallback to simple summary
-            return f"🤖 AI ANALYSIS: Your {len(portfolio_data)}-stock portfolio contains mixed characteristics."
+            # Return None when analysis fails - no placeholder data
+            return None
     
     def _classify_portfolio_style(self, features: np.ndarray, weights: np.ndarray) -> str:
         """Classify portfolio investment style using ML clustering"""
@@ -984,7 +1017,7 @@ class PortfolioAnalyzer:
             
             return min(100, max(0, risk_score))
         except:
-            return 50.0
+            return None
     
     def _calculate_opportunity_score(self, features: np.ndarray, weights: np.ndarray) -> float:
         """Calculate ML-based opportunity score (0-100)"""
@@ -1024,7 +1057,7 @@ class PortfolioAnalyzer:
             
             return min(100, max(0, opportunity_score))
         except:
-            return 50.0
+            return None
     
     def _generate_beginner_tips(self, portfolio_data: Dict) -> List[str]:
         """Generate actionable tips for beginner traders"""

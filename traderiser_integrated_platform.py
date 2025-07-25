@@ -15,8 +15,10 @@ from commodities_trader import CommoditiesTrader
 from etf_analyzer import ETFAnalyzer
 from alpaca_trader import AlpacaTrader
 from alpaca_mcp_integration import AlpacaMCPIntegration
+from excel_export_manager import ExcelExportManager
 from werkzeug.exceptions import BadRequest, TooManyRequests, InternalServerError
 from datetime import datetime
+from flask import send_file
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -38,6 +40,7 @@ commodities_trader = None
 etf_analyzer = None
 alpaca_trader = None
 alpaca_mcp = None
+excel_export_manager = None
 
 try:
     finance_database = IntegratedFinanceDatabase()
@@ -95,6 +98,13 @@ except Exception as e:
     logger.error(f"Failed to initialize Alpaca MCP integration: {str(e)}")
     alpaca_mcp = None
 
+try:
+    excel_export_manager = ExcelExportManager()
+    logger.info("Excel export manager initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Excel export manager: {str(e)}")
+    excel_export_manager = None
+
 @app.route('/')
 def index():
     """Main TradeRiser platform interface"""
@@ -132,6 +142,11 @@ def index():
         .results-section.active { display: block; }
         .results-header { color: #667eea; font-size: 1.8rem; margin-bottom: 20px; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
         .loading { text-align: center; padding: 40px; color: #666; }
+        .export-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+        .export-buttons .action-button { background: #28a745; border: none; color: white; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; text-align: center; }
+        .export-buttons .action-button:hover { background: #218838; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3); }
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .btn-group .action-button { flex: 1; min-width: 150px; }
         .loading::after { content: ""; display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 10px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px; }
@@ -180,13 +195,13 @@ def index():
 <body>
     <div class="container">
         <div class="header">
-            <h1>💰 TradeRiser</h1>
+            <h1>TradeRiser.AI</h1>
             <p>Your Simple Guide to Making Money with Stocks</p>
             <p><span class="status-indicator" style="background-color: #4CAF50; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;"></span>Ready to Help You Invest</p>
             
             <!-- SEC Compliance Notice -->
             <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 5px;">
-                <h4 style="color: #856404; margin: 0 0 10px 0;">⚠️ Important Disclaimer</h4>
+                <h4 style="color: #856404; margin: 0 0 10px 0;">Important Disclaimer</h4>
                 <p style="color: #856404; margin: 0; font-size: 14px;">
                     This platform is for informational and educational purposes only. Not investment advice. 
                     Trading involves substantial risk. <a href="/api/compliance/disclaimer" target="_blank">Read full disclaimer</a>
@@ -196,7 +211,7 @@ def index():
         
         <div class="platform-grid">
             <div class="platform-card">
-                <h3>💰 Smart Money Manager</h3>
+                <h3>Smart Money Manager</h3>
                 <p>Get simple advice on your stocks - should you buy more, sell, or hold? Our AI makes it easy to understand.</p>
                 <ul class="feature-list">
                     <li>Easy buy/sell recommendations</li>
@@ -207,7 +222,7 @@ def index():
                 <button class="action-button" onclick="showPortfolioAnalyzer()">Check My Stocks</button>
             </div>
             <div class="platform-card">
-                <h3>₿ Crypto Helper</h3>
+                <h3>Crypto Helper</h3>
                 <p>Should you buy Bitcoin, Ethereum, or other crypto? Get simple advice on digital currencies.</p>
                 <ul class="feature-list">
                     <li>Bitcoin & Ethereum analysis</li>
@@ -218,7 +233,7 @@ def index():
                 <button class="action-button" onclick="analyzeCrypto()">Check Crypto</button>
             </div>
             <div class="platform-card">
-                <h3>🔄 Strategy Tester</h3>
+                <h3>Strategy Tester</h3>
                 <p>Test your investment ideas before risking real money. See how your strategy would have performed.</p>
                 <ul class="feature-list">
                     <li>Test investment strategies</li>
@@ -229,7 +244,7 @@ def index():
                 <button class="action-button" onclick="runBacktest()">Test Strategy</button>
             </div>
             <div class="platform-card">
-                <h3>🥇 Gold & Oil Tracker</h3>
+                <h3>Gold & Oil Tracker</h3>
                 <p>Should you invest in gold, oil, or other commodities? Get simple advice on real assets.</p>
                 <ul class="feature-list">
                     <li>Gold & silver prices</li>
@@ -240,7 +255,7 @@ def index():
                 <button class="action-button" onclick="analyzeCommodities()">Check Commodities</button>
             </div>
             <div class="platform-card">
-                <h3>📈 Fund Finder</h3>
+                <h3>Fund Finder</h3>
                 <p>Find the best ETFs (investment funds) that match your goals. Compare fees and performance easily.</p>
                 <ul class="feature-list">
                     <li>Find best funds</li>
@@ -251,7 +266,7 @@ def index():
                 <button class="action-button" onclick="analyzeETF()">Find Funds</button>
             </div>
             <div class="platform-card">
-                <h3>🦙 Live Trading</h3>
+                <h3>Live Trading</h3>
                 <p>Ready to trade for real? Connect your brokerage account and start making actual trades safely.</p>
                 <ul class="feature-list">
                     <li>Real account connection</li>
@@ -260,6 +275,17 @@ def index():
                     <li>Live market prices</li>
                 </ul>
                 <button class="action-button" onclick="showAlpacaTrading()">Start Trading</button>
+            </div>
+            <div class="platform-card">
+                <h3>Excel Reports</h3>
+                <p>Download professional Excel reports with all your analysis data for offline review and sharing.</p>
+                <ul class="feature-list">
+                    <li>Portfolio analysis reports</li>
+                    <li>Formatted charts & tables</li>
+                    <li>Professional presentation</li>
+                    <li>Easy data sharing</li>
+                </ul>
+                <button class="action-button" onclick="showExportMenu()">Download Reports</button>
             </div>
         </div>
         
@@ -271,7 +297,7 @@ def index():
         </div>
         
         <div class="footer">
-            <p>TradeRiser © 2025 - Your Simple Investment Helper</p>
+            <p>TradeRiser.AI © 2025 - Your Simple Investment Helper</p>
             <p>Live market data • Easy AI recommendations • Safe investing guidance</p>
         </div>
     </div>
@@ -281,16 +307,25 @@ def index():
             showResults('Portfolio Analysis');
             document.getElementById('results-content').innerHTML = `
                 <div class="input-section">
-                    <h4>📊 Tell Me About Your Stocks</h4>
+                    <h4>Tell Me About Your Stocks</h4>
                     <div class="input-group">
                         <label>What stocks do you own? (separate with commas):</label>
                         <input type="text" id="portfolio-tickers" placeholder="AAPL,MSFT,GOOGL,TSLA,SPY" value="AAPL,MSFT,GOOGL,TSLA,SPY">
                     </div>
                     <div class="input-group">
-                        <label>How much of each? (optional - leave blank for equal amounts):</label>
-                        <input type="text" id="portfolio-weights" placeholder="0.2,0.2,0.2,0.2,0.2">
+                        <label>How many shares of each stock? (separate with commas):</label>
+                        <input type="text" id="portfolio-shares" placeholder="10,5,15,8,12">
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">Enter the actual number of shares you own for accurate analysis</small>
                     </div>
-                    <button class="action-button" onclick="runPortfolioAnalysis()">🚀 Get My Investment Advice</button>
+                    <div class="input-group">
+                        <label>Or use percentages if you don't know exact shares (optional):</label>
+                        <input type="text" id="portfolio-weights" placeholder="0.2,0.2,0.2,0.2,0.2">
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">Only use this if you don't know exact shares (must add up to 1.0)</small>
+                    </div>
+                    <div class="btn-group" style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="action-button" onclick="runPortfolioAnalysis()">Get My Investment Advice</button>
+                        <button class="action-button" onclick="exportPortfolioExcel()" style="background: #28a745;">Export to Excel</button>
+                    </div>
                 </div>
                 <div id="portfolio-results"></div>
             `;
@@ -298,12 +333,22 @@ def index():
         
         function runPortfolioAnalysis() {
             const tickers = document.getElementById('portfolio-tickers').value;
+            const shares = document.getElementById('portfolio-shares').value;
             const weights = document.getElementById('portfolio-weights').value;
             
             document.getElementById('portfolio-results').innerHTML = '<div class="loading">Analyzing portfolio...</div>';
             
             const payload = { tickers: tickers.split(',').map(t => t.trim()) };
-            if (weights) {
+            
+            // Prioritize shares over weights
+            if (shares && shares.trim()) {
+                payload.holdings = Object.fromEntries(
+                    tickers.split(',').map((t, i) => {
+                        const shareCount = parseInt(shares.split(',')[i]?.trim() || 0);
+                        return [t.trim(), shareCount];
+                    })
+                );
+            } else if (weights && weights.trim()) {
                 payload.holdings = Object.fromEntries(
                     tickers.split(',').map((t, i) => [t.trim(), parseFloat(weights.split(',')[i]?.trim() || 1/tickers.length)])
                 );
@@ -350,7 +395,7 @@ def index():
             // Create stock table
             let stockTableHTML = `
                 <div class="beginner-section">
-                    <h3>📊 Your Stocks - What Should You Do?</h3>
+                    <h3>Your Stocks - What Should You Do?</h3>
                     <div class="stock-table">
                         <div class="table-header">
                             <div>Stock</div>
@@ -362,24 +407,35 @@ def index():
             
             // Add each stock to the table
             Object.entries(aiRecs).forEach(([ticker, rec]) => {
-                const weight = data.portfolio_data?.[ticker]?.weight || 0;
-                const value = (summary.total_portfolio_value * weight).toFixed(0);
+                const portfolioItem = data.portfolio_data?.[ticker] || {};
+                const holdingDetail = summary.holdings_detail?.find(h => h.ticker === ticker);
+                
+                let value, shareInfo;
+                if (holdingDetail) {
+                    value = holdingDetail.position_value.toFixed(0);
+                    shareInfo = `${holdingDetail.shares} shares @ $${holdingDetail.current_price.toFixed(2)}`;
+                } else {
+                    const weight = portfolioItem.weight || 0;
+                    value = (summary.total_portfolio_value * weight).toFixed(0);
+                    shareInfo = `${(weight * 100).toFixed(1)}% of portfolio`;
+                }
+                
                 const recommendation = rec.recommendation || 'Hold';
                 const reasoning = rec.reasoning || 'Market analysis suggests holding position';
                 
                 let recColor = 'neutral';
-                let actionIcon = '⏸️';
+                let actionIcon = 'HOLD';
                 if (recommendation.includes('Buy')) {
                     recColor = 'positive';
-                    actionIcon = '🚀';
+                    actionIcon = 'BUY';
                 } else if (recommendation.includes('Sell')) {
                     recColor = 'negative';
-                    actionIcon = '⚠️';
+                    actionIcon = 'SELL';
                 }
                 
                 stockTableHTML += `
                     <div class="table-row">
-                        <div class="stock-name">${actionIcon} ${ticker}</div>
+                        <div class="stock-name">${actionIcon} ${ticker}<br><small style="font-weight: normal; color: #666;">${shareInfo}</small></div>
                         <div class="stock-value">$${value}</div>
                         <div class="recommendation ${recColor}">${recommendation}</div>
                         <div class="reasoning">${reasoning.substring(0, 80)}...</div>
@@ -395,7 +451,7 @@ def index():
             // Create simple summary
             const simpleSummary = `
                 <div class="beginner-section">
-                    <h3>💰 Your Money Summary</h3>
+                    <h3>Your Money Summary</h3>
                     <div class="money-cards">
                         <div class="money-card">
                             <div class="big-number">$${summary.total_portfolio_value?.toFixed(0) || 0}</div>
@@ -416,10 +472,10 @@ def index():
             // Create action guidance
             const actionGuidance = `
                 <div class="beginner-section">
-                    <h3>🎯 What You Should Do Next</h3>
+                    <h3>What You Should Do Next</h3>
                     <div class="action-cards">
                         <div class="action-card positive">
-                            <h4>🚀 Stocks to Buy More Of</h4>
+                            <h4>Stocks to Buy More Of</h4>
                             <div class="action-list">
                                 ${Object.entries(aiRecs).filter(([_, rec]) => rec.recommendation?.includes('Buy')).map(([ticker, _]) => 
                                     `<div class="action-item">• ${ticker} - Good opportunity to invest more</div>`
@@ -427,7 +483,7 @@ def index():
                             </div>
                         </div>
                         <div class="action-card negative">
-                            <h4>⚠️ Stocks to Consider Selling</h4>
+                            <h4>Stocks to Consider Selling</h4>
                             <div class="action-list">
                                 ${Object.entries(aiRecs).filter(([_, rec]) => rec.recommendation?.includes('Sell')).map(([ticker, _]) => 
                                     `<div class="action-item">• ${ticker} - Consider reducing position</div>`
@@ -665,7 +721,7 @@ def index():
         }
         
         function displayEnhancedAlpacaResults(accountData, portfolioData, statusData) {
-            const mcpStatus = statusData.mcp_available ? '🟢 MCP Enhanced' : '🟡 Standard Mode';
+            const mcpStatus = statusData.mcp_available ? 'MCP Enhanced' : 'Standard Mode';
             const mcpBadge = accountData.mcp_enhanced ? '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; margin-left: 10px;">MCP</span>' : '';
             
             document.getElementById('results-content').innerHTML = `
@@ -712,10 +768,10 @@ def index():
                     <div class="analysis-card">
                         <h4>Enhanced Trading Controls</h4>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                            <button class="action-button" onclick="loadEnhancedPositions()">📊 Positions</button>
-                            <button class="action-button" onclick="loadEnhancedOrders()">📋 Orders</button>
-                            <button class="action-button" onclick="showQuickTrade()">⚡ Quick Trade</button>
-                            <button class="action-button" onclick="showMarketData()">📈 Market Data</button>
+                            <button class="action-button" onclick="loadEnhancedPositions()">Positions</button>
+                        <button class="action-button" onclick="loadEnhancedOrders()">Orders</button>
+                        <button class="action-button" onclick="showQuickTrade()">Quick Trade</button>
+                        <button class="action-button" onclick="showMarketData()">Market Data</button>
                         </div>
                         <div style="font-size: 0.9em; color: #666; text-align: center;">
                             Enhanced with Model Context Protocol
@@ -990,6 +1046,79 @@ def index():
             document.getElementById('results-content').innerHTML = '<div class="loading">Initializing...</div>';
         }
         
+        // Excel Export Functions
+        function exportPortfolioExcel() {
+            const tickers = document.getElementById('portfolio-tickers')?.value || 'AAPL,MSFT,GOOGL';
+            const shares = document.getElementById('portfolio-shares')?.value || '';
+            
+            const url = `/api/export/portfolio/${tickers}${shares ? '?shares=' + encodeURIComponent(shares) : ''}`;
+            window.open(url, '_blank');
+        }
+        
+        function exportETFExcel() {
+            const symbol = prompt('Enter ETF symbol to export (e.g., SPY, QQQ, VTI):', 'SPY');
+            if (symbol) {
+                window.open(`/api/export/etf/${symbol.toUpperCase()}`, '_blank');
+            }
+        }
+        
+        function exportCryptoExcel() {
+            const symbol = prompt('Enter crypto symbol to export (e.g., BTC-USD, ETH-USD):', 'BTC-USD');
+            if (symbol) {
+                window.open(`/api/export/crypto/${symbol.toUpperCase()}`, '_blank');
+            }
+        }
+        
+        function exportCommoditiesExcel() {
+            window.open('/api/export/commodities', '_blank');
+        }
+        
+        function exportBacktestExcel() {
+            const symbols = prompt('Enter symbols for backtest (comma-separated):', 'AAPL,GOOGL,MSFT');
+            const strategy = prompt('Enter strategy (momentum, mean_reversion, breakout):', 'momentum');
+            
+            if (symbols && strategy) {
+                const url = `/api/export/backtest?symbols=${encodeURIComponent(symbols)}&strategy=${encodeURIComponent(strategy)}`;
+                window.open(url, '_blank');
+            }
+        }
+        
+        function exportAlpacaExcel() {
+            window.open('/api/export/alpaca', '_blank');
+        }
+        
+        function exportComprehensiveExcel() {
+            const symbols = prompt('Enter symbols for comprehensive report (comma-separated):', 'AAPL,GOOGL,MSFT');
+            if (symbols) {
+                const url = `/api/export/comprehensive?symbols=${encodeURIComponent(symbols)}`;
+                window.open(url, '_blank');
+            }
+        }
+        
+        function showExportMenu() {
+            const exportMenu = `
+                <div class="beginner-section">
+                    <h3>Export Your Data to Excel</h3>
+                    <p>Download professional Excel reports with all your analysis data:</p>
+                    <div class="export-buttons">
+                        <button class="action-button" onclick="exportPortfolioExcel()">Portfolio Analysis</button>
+                        <button class="action-button" onclick="exportETFExcel()">ETF Analysis</button>
+                        <button class="action-button" onclick="exportCryptoExcel()">Crypto Analysis</button>
+                        <button class="action-button" onclick="exportCommoditiesExcel()">Commodities Data</button>
+                        <button class="action-button" onclick="exportBacktestExcel()">Backtest Results</button>
+                        <button class="action-button" onclick="exportAlpacaExcel()">Trading Data</button>
+                        <button class="action-button" onclick="exportComprehensiveExcel()">Complete Report</button>
+                    </div>
+                    <div style="margin-top: 15px; padding: 10px; background: #e8f4fd; border-radius: 5px; font-size: 14px;">
+                        <strong>Tip:</strong> Excel files include charts, formatted data, and detailed analysis perfect for sharing or further analysis.
+                    </div>
+                </div>
+            `;
+            
+            showResults('Excel Export Center');
+            document.getElementById('results-content').innerHTML = exportMenu;
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             console.log('TradeRiser Platform Initialized');
         });
@@ -1099,6 +1228,25 @@ def health_check():
         logger.error(f"Health check failed: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/tier-info', methods=['GET'])
+def get_tier_info():
+    """Get subscription tier information and available APIs"""
+    try:
+        logger.info("Tier info requested")
+        if portfolio_analyzer and hasattr(portfolio_analyzer, 'api_client'):
+            tier_info = portfolio_analyzer.api_client.get_tier_info()
+            return jsonify(tier_info)
+        else:
+            return jsonify({
+                'tier': 'free',
+                'available_apis': ['Alpha Vantage', 'CoinGecko', 'FRED'],
+                'pro_apis': ['Twitter', 'Quandl', 'Financial Modeling Prep', 'IEX Cloud'],
+                'message': 'Portfolio analyzer not available'
+            })
+    except Exception as e:
+        logger.error(f"Tier info failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 # Commodities Trading Endpoints
 @app.route('/api/commodities/analyze/<symbol>')
 def analyze_commodity(symbol):
@@ -1130,7 +1278,25 @@ def screen_commodities():
 def get_commodity_recommendations():
     """Get commodity trading recommendations"""
     try:
-        recommendations = commodities_trader.get_recommendations()
+        if commodities_trader is None:
+            logger.error("Commodities trader not available")
+            return jsonify({'error': 'Commodities trader module not available'}), 503
+            
+        analysis = commodities_trader.analyze_commodity_market()
+        if 'error' in analysis:
+            logger.error(f"Commodities analysis error: {analysis['error']}")
+            return jsonify({'error': analysis['error']}), 500
+            
+        # Format the response to match what the frontend expects
+        recommendations = {
+            'recommendations': analysis.get('commodities', []),
+            'market_summary': analysis.get('market_summary', {}),
+            'sector_performance': analysis.get('sector_performance', {}),
+            'top_performers': analysis.get('top_performers', []),
+            'market_recommendations': analysis.get('recommendations', [])
+        }
+        
+        logger.info("Commodities analysis completed successfully")
         return jsonify(recommendations)
     except Exception as e:
         logger.error(f"Error getting commodity recommendations: {str(e)}")
@@ -1292,6 +1458,243 @@ def get_alpaca_status():
         return jsonify(status)
     except Exception as e:
         logger.error(f"Error getting Alpaca status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Excel Export Endpoints
+@app.route('/api/export/portfolio/<symbols>')
+def export_portfolio_excel(symbols):
+    """Export portfolio analysis to Excel"""
+    try:
+        if not excel_export_manager:
+            return jsonify({'error': 'Excel export not available'}), 500
+            
+        symbols_list = symbols.split(',')
+        shares_input = request.args.get('shares', '')
+        
+        # Get portfolio analysis data
+        analysis = portfolio_analyzer.analyze_portfolio(symbols_list, shares_input)
+        
+        # Prepare data for Excel export
+        portfolio_data = {
+            'summary': analysis.get('summary', {}),
+            'holdings': analysis.get('holdings', []),
+            'performance': analysis.get('performance_metrics', {}),
+            'risk_analysis': analysis.get('risk_analysis', {}),
+            'recommendations': analysis.get('recommendations', [])
+        }
+        
+        filename = excel_export_manager.export_portfolio_analysis(portfolio_data)
+        return send_file(filename, as_attachment=True, download_name=os.path.basename(filename))
+        
+    except Exception as e:
+        logger.error(f"Error exporting portfolio to Excel: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export/etf/<symbol>')
+def export_etf_excel(symbol):
+    """Export ETF analysis to Excel"""
+    try:
+        if not excel_export_manager:
+            return jsonify({'error': 'Excel export not available'}), 500
+            
+        # Get ETF analysis data
+        analysis = etf_analyzer.analyze_etf(symbol)
+        
+        # Prepare data for Excel export
+        etf_data = {
+            'overview': analysis.get('overview', {}),
+            'holdings': analysis.get('holdings', []),
+            'performance_comparison': analysis.get('performance', {}),
+            'sector_allocation': analysis.get('sector_allocation', []),
+            'expense_analysis': analysis.get('expense_analysis', {})
+        }
+        
+        filename = excel_export_manager.export_etf_analysis(etf_data)
+        return send_file(filename, as_attachment=True, download_name=os.path.basename(filename))
+        
+    except Exception as e:
+        logger.error(f"Error exporting ETF to Excel: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export/crypto/<symbol>')
+def export_crypto_excel(symbol):
+    """Export crypto analysis to Excel"""
+    try:
+        if not excel_export_manager:
+            return jsonify({'error': 'Excel export not available'}), 500
+            
+        # Get crypto analysis data
+        analysis = crypto_trader.analyze_crypto(symbol)
+        
+        # Prepare data for Excel export
+        crypto_data = {
+            'overview': analysis.get('overview', {}),
+            'price_analysis': analysis.get('price_analysis', {}),
+            'technical_indicators': analysis.get('technical_indicators', {}),
+            'sentiment': analysis.get('sentiment', {})
+        }
+        
+        filename = excel_export_manager.export_crypto_analysis(crypto_data)
+        return send_file(filename, as_attachment=True, download_name=os.path.basename(filename))
+        
+    except Exception as e:
+        logger.error(f"Error exporting crypto to Excel: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export/commodities')
+def export_commodities_excel():
+    """Export commodities analysis to Excel"""
+    try:
+        if not excel_export_manager:
+            return jsonify({'error': 'Excel export not available'}), 500
+            
+        # Get commodities analysis data
+        analysis = commodities_trader.analyze_commodity_market()
+        if 'error' in analysis:
+            return jsonify({'error': analysis['error']}), 500
+        
+        # Prepare data for Excel export
+        commodities_data = {
+            'overview': analysis.get('commodities', []),
+            'market_summary': analysis.get('market_summary', {}),
+            'sector_performance': analysis.get('sector_performance', {}),
+            'top_performers': analysis.get('top_performers', [])
+        }
+        
+        filename = excel_export_manager.export_commodities_analysis(commodities_data)
+        return send_file(filename, as_attachment=True, download_name=os.path.basename(filename))
+        
+    except Exception as e:
+        logger.error(f"Error exporting commodities to Excel: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export/backtest')
+def export_backtest_excel():
+    """Export backtest results to Excel"""
+    try:
+        if not excel_export_manager:
+            return jsonify({'error': 'Excel export not available'}), 500
+            
+        symbols = request.args.get('symbols', 'AAPL,GOOGL,MSFT').split(',')
+        strategy = request.args.get('strategy', 'momentum')
+        
+        # Get backtest data
+        backtest_result = backtest_solver.run_backtest(symbols, strategy)
+        
+        # Prepare data for Excel export
+        backtest_data = {
+            'performance': backtest_result.get('performance', {}),
+            'trades': backtest_result.get('trades', []),
+            'risk_metrics': backtest_result.get('risk_metrics', {}),
+            'drawdown': backtest_result.get('drawdown', [])
+        }
+        
+        filename = excel_export_manager.export_backtest_results(backtest_data)
+        return send_file(filename, as_attachment=True, download_name=os.path.basename(filename))
+        
+    except Exception as e:
+        logger.error(f"Error exporting backtest to Excel: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export/alpaca')
+def export_alpaca_excel():
+    """Export Alpaca trading data to Excel"""
+    try:
+        if not excel_export_manager:
+            return jsonify({'error': 'Excel export not available'}), 500
+            
+        # Get Alpaca trading data
+        account_info = alpaca_mcp.get_enhanced_account_info()
+        positions = alpaca_mcp.get_enhanced_positions()
+        orders = alpaca_mcp.get_enhanced_orders('all')
+        portfolio_summary = alpaca_mcp.get_portfolio_summary()
+        
+        # Prepare data for Excel export
+        trading_data = {
+            'account': account_info,
+            'positions': positions.get('positions', []),
+            'orders': orders.get('orders', []),
+            'performance': portfolio_summary
+        }
+        
+        filename = excel_export_manager.export_alpaca_trading_data(trading_data)
+        return send_file(filename, as_attachment=True, download_name=os.path.basename(filename))
+        
+    except Exception as e:
+        logger.error(f"Error exporting Alpaca data to Excel: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export/comprehensive')
+def export_comprehensive_excel():
+    """Export comprehensive report with all modules data to Excel"""
+    try:
+        if not excel_export_manager:
+            return jsonify({'error': 'Excel export not available'}), 500
+            
+        # Get data from all modules
+        symbols = request.args.get('symbols', 'AAPL,GOOGL,MSFT').split(',')
+        
+        # Portfolio data
+        portfolio_analysis = portfolio_analyzer.analyze_portfolio(symbols, '')
+        
+        # ETF data (using first symbol as example)
+        etf_analysis = etf_analyzer.analyze_etf('SPY')
+        
+        # Crypto data
+        crypto_analysis = crypto_trader.analyze_crypto('BTC-USD')
+        
+        # Commodities data
+        commodities_analysis = commodities_trader.get_recommendations()
+        
+        # Backtest data
+        backtest_result = backtest_solver.run_backtest(symbols, 'momentum')
+        
+        # Prepare comprehensive data
+        all_data = {
+            'executive_summary': {
+                'report_date': datetime.now().isoformat(),
+                'symbols_analyzed': symbols,
+                'total_modules': 5,
+                'platform_version': '1.0'
+            },
+            'portfolio': {
+                'summary': portfolio_analysis.get('summary', {}),
+                'holdings': portfolio_analysis.get('holdings', []),
+                'performance': portfolio_analysis.get('performance_metrics', {})
+            },
+            'etf': {
+                'overview': etf_analysis.get('overview', {}),
+                'holdings': etf_analysis.get('holdings', [])
+            },
+            'crypto': {
+                'overview': crypto_analysis.get('overview', {}),
+                'price_analysis': crypto_analysis.get('price_analysis', {})
+            },
+            'commodities': {
+                'overview': commodities_analysis.get('overview', []),
+                'recommendations': commodities_analysis.get('recommendations', [])
+            }
+        }
+        
+        filename = excel_export_manager.export_comprehensive_report(all_data)
+        return send_file(filename, as_attachment=True, download_name=os.path.basename(filename))
+        
+    except Exception as e:
+        logger.error(f"Error exporting comprehensive report to Excel: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export/capabilities')
+def get_export_capabilities():
+    """Get available Excel export capabilities"""
+    try:
+        if not excel_export_manager:
+            return jsonify({'error': 'Excel export not available'}), 500
+            
+        capabilities = excel_export_manager.get_export_summary()
+        return jsonify(capabilities)
+        
+    except Exception as e:
+        logger.error(f"Error getting export capabilities: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/compliance/disclaimer')

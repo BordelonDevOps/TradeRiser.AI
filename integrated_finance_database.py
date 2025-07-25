@@ -99,22 +99,7 @@ class IntegratedFinanceDatabase:
                 'SOL-USD': {'name': 'Solana', 'category': 'Cryptocurrency', 'market_cap': 'Large'}
             }
             
-            # Fallback data if Finance Database fails
-            if not symbol_db['US_STOCKS']:
-                symbol_db['US_STOCKS'] = {
-                    'AAPL': {'name': 'Apple Inc.', 'sector': 'Technology', 'market_cap': 'Large', 'has_options': True},
-                    'MSFT': {'name': 'Microsoft Corporation', 'sector': 'Technology', 'market_cap': 'Large', 'has_options': True},
-                    'GOOGL': {'name': 'Alphabet Inc.', 'sector': 'Technology', 'market_cap': 'Large', 'has_options': True},
-                    'AMZN': {'name': 'Amazon.com Inc.', 'sector': 'Consumer Discretionary', 'market_cap': 'Large', 'has_options': True},
-                    'TSLA': {'name': 'Tesla Inc.', 'sector': 'Consumer Discretionary', 'market_cap': 'Large', 'has_options': True}
-                }
-            
-            if not symbol_db['ETFS']:
-                symbol_db['ETFS'] = {
-                    'SPY': {'name': 'SPDR S&P 500 ETF Trust', 'category': 'Large Cap Blend', 'expense_ratio': 0.0945},
-                    'QQQ': {'name': 'Invesco QQQ Trust', 'category': 'Large Cap Growth', 'expense_ratio': 0.20},
-                    'VTI': {'name': 'Vanguard Total Stock Market ETF', 'category': 'Large Cap Blend', 'expense_ratio': 0.03}
-                }
+            # No fallback placeholder data - use only real data from Finance Database
             
             self.symbol_database = symbol_db
             

@@ -27,23 +27,94 @@ class APIClient:
     _twitter_warning_shown = False  # Class variable to track warning
     
     def __init__(self):
-        """Initialize with Redis or in-memory fallback"""
+        """Initialize with Redis or in-memory fallback and tier-based API access"""
         self.logger = logging.getLogger(__name__)
+        
+        # Initialize subscription tier
+        self.subscription_tier = os.getenv('SUBSCRIPTION_TIER', 'free').lower()
+        self.is_pro_tier = self.subscription_tier == 'pro'
+        
+        # Redis configuration
         try:
-            self.redis = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+            redis_host = os.getenv('REDIS_HOST', 'localhost')
+            redis_port = int(os.getenv('REDIS_PORT', 6379))
+            redis_db = int(os.getenv('REDIS_DB', 0))
+            self.redis = redis.Redis(host=redis_host, port=redis_port, db=redis_db, decode_responses=True)
             self.redis.ping()  # Test connection
             self.logger.info("Connected to Redis")
         except redis.ConnectionError:
             self.logger.warning("Redis connection failed, using in-memory cache")
             self.redis = None
             self.in_memory_cache = {}
+        
+        # Free tier APIs (always available)
         self.alpha_vantage_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+        self.fred_api_key = os.getenv('FRED_API_KEY')
+        
+        # Pro tier APIs (only available for pro subscribers)
+        if self.is_pro_tier:
+            self.twitter_api_key = os.getenv('TWITTER_API_KEY')
+            self.quandl_api_key = os.getenv('QUANDL_API_KEY')
+            self.fmp_api_key = os.getenv('FMP_API_KEY')
+            self.iex_cloud_api_key = os.getenv('IEX_CLOUD_API_KEY')
+            self.logger.info("Pro tier APIs initialized")
+        else:
+            self.logger.info("Free tier mode - using free APIs only")
         
         # Alternative sentiment analysis setup (no API keys required)
         self.sentiment_enabled = True
         self.logger.info("Alternative sentiment analysis initialized")
         
         self.pytrends = TrendReq()
+    
+    def is_api_available(self, api_name: str) -> bool:
+        """Check if a specific API is available based on subscription tier"""
+        free_tier_apis = ['alpha_vantage', 'fred', 'coingecko', 'pytrends', 'yfinance']
+        pro_tier_apis = ['twitter', 'quandl', 'fmp', 'iex_cloud', 'alpaca']
+        
+        if api_name in free_tier_apis:
+            return True
+        elif api_name in pro_tier_apis:
+            return self.is_pro_tier
+        else:
+            return False
+    
+    def get_tier_info(self) -> dict:
+        """Get current subscription tier information"""
+        return {
+            'tier': self.subscription_tier,
+            'is_pro': self.is_pro_tier,
+            'available_apis': self._get_available_apis(),
+            'rate_limits': self._get_rate_limits()
+        }
+    
+    def _get_available_apis(self) -> list:
+        """Get list of available APIs for current tier"""
+        free_apis = ['Alpha Vantage', 'FRED', 'CoinGecko', 'Google Trends', 'Yahoo Finance']
+        pro_apis = ['Twitter', 'Quandl', 'Financial Modeling Prep', 'IEX Cloud', 'Alpaca Trading']
+        
+        if self.is_pro_tier:
+            return free_apis + pro_apis
+        else:
+            return free_apis
+    
+    def _get_rate_limits(self) -> dict:
+        """Get rate limits for current tier"""
+        if self.is_pro_tier:
+            return {
+                'alpha_vantage': '25 calls/minute (Pro)',
+                'twitter': '300 calls/15min (Pro)',
+                'fred': '120 calls/minute',
+                'coingecko': '50 calls/minute (Pro)',
+                'note': 'Pro tier includes higher rate limits and premium APIs'
+            }
+        else:
+            return {
+                'alpha_vantage': '5 calls/minute (Free)',
+                'fred': '120 calls/minute',
+                'coingecko': '10-50 calls/minute (Free)',
+                'note': 'Free tier with standard rate limits. Upgrade to Pro for premium features.'
+            }
 
     def _cache_get(self, key: str) -> dict:
         """Get from cache (Redis or in-memory)"""
