@@ -110,13 +110,13 @@ chmod +x setup.sh
    ```bash
    python run.py
    ```
-   Access at `http://localhost:5000`
+   Access at `http://localhost:5001`
 
 ## Production Deployment
 
 ```bash
 # Using Gunicorn (recommended)
-gunicorn -w 4 -b 0.0.0.0:5000 traderiser_integrated_platform:app
+gunicorn -w 4 -b 0.0.0.0:5001 traderiser_integrated_platform:app
 
 # Or using the built-in Flask server
 FLASK_ENV=production python run.py

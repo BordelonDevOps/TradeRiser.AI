@@ -1,4 +1,4 @@
-"""Integrated Finance Database using JerBouma's Finance Database and Toolkit"""
+"""Integrated Finance Database using Finance Database and Toolkit"""
 import os
 import pandas as pd
 import requests
@@ -17,11 +17,11 @@ logging.basicConfig(
 
 class IntegratedFinanceDatabase:
     def __init__(self):
-        """Initialize the integrated finance database using JerBouma's Finance Database"""
+        """Initialize the integrated finance database using Finance Database"""
         self.api_client = APIClient()
         self.logger = logging.getLogger(__name__)
         
-        # Initialize JerBouma's Finance Database components
+        # Initialize Finance Database components
         try:
             self.equities = Equities()
             self.etfs = ETFs()
@@ -29,7 +29,7 @@ class IntegratedFinanceDatabase:
             self.indices = Indices()
             self.currencies = Currencies()
             self.money_markets = Moneymarkets()
-            self.logger.info("Successfully initialized JerBouma's Finance Database")
+            self.logger.info("Successfully initialized Finance Database")
         except Exception as e:
             self.logger.error(f"Error initializing Finance Database: {str(e)}")
             # Fallback to basic data
@@ -112,14 +112,13 @@ class IntegratedFinanceDatabase:
             
         except Exception as e:
             self.logger.error(f"Error initializing symbol database: {str(e)}")
-            # Return minimal fallback data
+            # No fallback data - return empty database
             self.symbol_database = {
-                'US_STOCKS': {
-                    'AAPL': {'name': 'Apple Inc.', 'sector': 'Technology', 'market_cap': 'Large', 'has_options': True},
-                    'MSFT': {'name': 'Microsoft Corporation', 'sector': 'Technology', 'market_cap': 'Large', 'has_options': True}
-                },
-                'ETFS': {'SPY': {'name': 'SPDR S&P 500 ETF Trust', 'category': 'Large Cap Blend', 'expense_ratio': 0.0945}},
-                'CRYPTO': {'BTC-USD': {'name': 'Bitcoin', 'category': 'Cryptocurrency', 'market_cap': 'Large'}}
+                'US_STOCKS': {},
+                'ETFS': {},
+                'CRYPTO': {},
+                'INDICES': {},
+                'CURRENCIES': {}
             }
 
     def search_instruments(self, query: str, category: Optional[str] = None, limit: int = 50) -> List[Dict]:

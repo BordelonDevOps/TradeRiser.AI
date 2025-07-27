@@ -20,12 +20,12 @@ def load_environment():
         try:
             from dotenv import load_dotenv
             load_dotenv(env_file)
-            print("✓ Environment variables loaded from .env file")
+            print("Environment variables loaded from .env file")
         except ImportError:
-            print("⚠ python-dotenv not installed. Install with: pip install python-dotenv")
-            print("⚠ Falling back to system environment variables")
+            print("WARNING: python-dotenv not installed. Install with: pip install python-dotenv")
+            print("WARNING: Falling back to system environment variables")
     else:
-        print("⚠ .env file not found. Copy .env.example to .env and configure your API keys")
+        print("WARNING: .env file not found. Copy .env.example to .env and configure your API keys")
 
 def check_dependencies():
     """Check if all required dependencies are installed"""
@@ -42,7 +42,7 @@ def check_dependencies():
             missing_packages.append(package)
     
     if missing_packages:
-        print(f"❌ Missing required packages: {', '.join(missing_packages)}")
+        print(f"ERROR: Missing required packages: {', '.join(missing_packages)}")
         print("Install them with: pip install -r requirements.txt")
         return False
     
@@ -60,7 +60,7 @@ def check_api_keys():
             missing_required.append(key)
     
     if missing_required:
-        print(f"❌ Missing required API keys: {', '.join(missing_required)}")
+        print(f"ERROR: Missing required API keys: {', '.join(missing_required)}")
         print("Please configure them in your .env file")
         return False
     
@@ -68,7 +68,7 @@ def check_api_keys():
     
     missing_optional = [key for key in optional_keys if not os.getenv(key)]
     if missing_optional:
-        print(f"⚠ Optional API keys not configured: {', '.join(missing_optional)}")
+        print(f"WARNING: Optional API keys not configured: {', '.join(missing_optional)}")
         print("Some features may be limited")
     
     return True
@@ -88,7 +88,7 @@ def setup_logging():
 
 def main():
     """Main application entry point"""
-    print("🚀 Starting TradeRiser.AI - Professional Investment Platform")
+    print("Starting TradeRiser.AI - Professional Investment Platform")
     print("=" * 60)
     
     # Load environment
@@ -107,10 +107,10 @@ def main():
     
     # Import and run the application
     try:
-        from traderiser_integrated_platform import app
+        from new_traderiser_platform import app
         
         host = os.getenv('HOST', '0.0.0.0')
-        port = int(os.getenv('PORT', 5000))
+        port = int(os.getenv('PORT', 5001))
         debug = os.getenv('FLASK_ENV') == 'development'
         
         print(f"✓ Starting Flask application on http://{host}:{port}")
@@ -120,10 +120,10 @@ def main():
         app.run(host=host, port=port, debug=debug)
         
     except ImportError as e:
-        print(f"❌ Failed to import application: {e}")
+        print(f"ERROR: Failed to import application: {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Failed to start application: {e}")
+        print(f"ERROR: Failed to start application: {e}")
         sys.exit(1)
 
 if __name__ == '__main__':

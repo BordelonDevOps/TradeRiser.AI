@@ -19,5 +19,5 @@ logging.basicConfig(
 
 if __name__ == '__main__':
     logging.info("Starting TradeRiser Integrated Platform")
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5001)), debug=False)
 ```

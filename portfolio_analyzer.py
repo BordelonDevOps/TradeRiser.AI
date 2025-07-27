@@ -7,7 +7,6 @@ import requests
 from datetime import datetime
 from typing import Dict, List
 from Utils.utils_api_client import APIClient
-import logging
 import os
 import yfinance as yf
 from quant_strategies import QuantStrategies
@@ -19,18 +18,16 @@ from sklearn.metrics import silhouette_score
 from scipy import stats
 import ta
 from arch import arch_model
+from utils_shared import AnalysisBase, TechnicalIndicators, setup_logging
 
-logging.basicConfig(
-    filename='traderiser.log',
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s'
-)
+# Setup centralized logging
+setup_logging()
 
-class PortfolioAnalyzer:
+class PortfolioAnalyzer(AnalysisBase):
     def __init__(self):
         """Initialize with API client"""
+        super().__init__('PortfolioAnalyzer')
         self.api_client = APIClient()
-        self.logger = logging.getLogger(__name__)
         self.risk_free_rate = 0.045
         self.quant_strategies = QuantStrategies()
         self.base_urls = {
@@ -184,7 +181,7 @@ class PortfolioAnalyzer:
             result = {
                 'current_price': current_price,
                 'price_change_1m': (closes[-1] - closes[-21]) / closes[-21] * 100 if len(closes) > 21 else 0,
-                'rsi': self._calculate_rsi(closes),
+                'rsi': self.technical_indicators.calculate_rsi_numpy(closes),
                 'historical_volatility_30d': np.std(closes[-30:]) * np.sqrt(252) if len(closes) >= 30 else 0.2
             }
             
@@ -344,16 +341,7 @@ class PortfolioAnalyzer:
             'most_weighted_sector': max(sector_weights, key=sector_weights.get) if sector_weights else 'Unknown'
         }
 
-    def _calculate_rsi(self, prices: np.ndarray, period: int = 14) -> float:
-        """Calculate RSI"""
-        if len(prices) < period + 1:
-            return 50
-        deltas = np.diff(prices)
-        gains = np.where(deltas > 0, deltas, 0)
-        losses = np.where(deltas < 0, -deltas, 0)
-        avg_gain = np.mean(gains[-period:])
-        avg_loss = np.mean(losses[-period:])
-        return 100 - (100 / (1 + avg_gain / max(avg_loss, 1)))
+    # RSI calculation moved to shared utilities
 
     def _generate_ai_recommendations(self, portfolio_data: Dict) -> Dict:
         """Generate AI-driven investment recommendations using machine learning"""
@@ -698,16 +686,16 @@ class PortfolioAnalyzer:
             # Basic volatility assessment
             base_risk_msg = ""
             if volatility < 0.2:
-                base_risk_msg = "🟢 LOW RISK: Your stocks move steadily. Good for beginners who want stable growth."
+                base_risk_msg = "LOW RISK: Your stocks move steadily. Good for beginners who want stable growth."
                 risk_category = "Conservative"
             elif volatility < 0.4:
-                base_risk_msg = "🟡 MEDIUM RISK: Your stocks have normal ups and downs. Suitable for most investors."
+                base_risk_msg = "MEDIUM RISK: Your stocks have normal ups and downs. Suitable for most investors."
                 risk_category = "Balanced"
             elif volatility < 0.6:
                 base_risk_msg = "🟠 HIGH RISK: Your stocks swing significantly. Only invest what you can afford to lose."
                 risk_category = "Aggressive"
             else:
-                base_risk_msg = "🔴 VERY HIGH RISK: Your stocks are extremely volatile. This is speculative investing."
+                base_risk_msg = "VERY HIGH RISK: Your stocks are extremely volatile. This is speculative investing."
                 risk_category = "Speculative"
             
             # Enhanced ML analysis if portfolio data available
@@ -765,15 +753,15 @@ class PortfolioAnalyzer:
     def _explain_valuation(self, pe_ratio: float) -> str:
         """Explain valuation in beginner terms"""
         if pe_ratio <= 0:
-            return "⚠️ Some companies are losing money. Be cautious with loss-making stocks."
+            return "Some companies are losing money. Be cautious with loss-making stocks."
         elif pe_ratio < 15:
-            return "💰 UNDERVALUED: Your stocks might be bargains - the market may not recognize their true worth yet."
+            return "UNDERVALUED: Your stocks might be bargains - the market may not recognize their true worth yet."
         elif pe_ratio < 25:
-            return "✅ FAIR VALUE: Your stocks are reasonably priced relative to their earnings."
+            return "FAIR VALUE: Your stocks are reasonably priced relative to their earnings."
         elif pe_ratio < 40:
-            return "📈 GROWTH PREMIUM: You're paying extra for expected future growth. Higher risk, higher reward."
+            return "GROWTH PREMIUM: You're paying extra for expected future growth. Higher risk, higher reward."
         else:
-            return "⚠️ EXPENSIVE: Your stocks are very pricey. Make sure the growth justifies the cost."
+            return "EXPENSIVE: Your stocks are very pricey. Make sure the growth justifies the cost."
     
     def _explain_momentum(self, rsi: float, portfolio_data: Dict = None) -> str:
         """ML-enhanced momentum analysis with technical indicators"""
@@ -783,13 +771,13 @@ class PortfolioAnalyzer:
                 base_msg = "📉 OVERSOLD: Stocks may be due for a bounce back up. Potential buying opportunity."
                 momentum_signal = "Oversold"
             elif rsi < 50:
-                base_msg = "📊 WEAK MOMENTUM: Stocks are moving down but not extremely oversold."
+                base_msg = "WEAK MOMENTUM: Stocks are moving down but not extremely oversold."
                 momentum_signal = "Bearish"
             elif rsi < 70:
-                base_msg = "📈 STRONG MOMENTUM: Stocks are trending upward with healthy momentum."
+                base_msg = "STRONG MOMENTUM: Stocks are trending upward with healthy momentum."
                 momentum_signal = "Bullish"
             else:
-                base_msg = "🚨 OVERBOUGHT: Stocks may be due for a pullback. Consider taking some profits."
+                base_msg = "OVERBOUGHT: Stocks may be due for a pullback. Consider taking some profits."
                 momentum_signal = "Overbought"
             
             # Enhanced ML momentum analysis
@@ -904,26 +892,26 @@ class PortfolioAnalyzer:
             opportunity_score = self._calculate_opportunity_score(X, w)
             
             # Generate base summary
-            summary = f"🤖 **ML ANALYSIS**: Your {num_stocks}-stock portfolio spans {len(sectors)} sectors. "
+            summary = f"**ML ANALYSIS**: Your {num_stocks}-stock portfolio spans {len(sectors)} sectors. "
             
             # Add ML-driven style classification
             summary += f"**Style**: {portfolio_style}. "
             
             # Risk assessment with ML insights
             if risk_score > 75:
-                summary += "⚠️ **High-Risk Profile**: Significant volatility expected - suitable for experienced investors. "
+                summary += "**High-Risk Profile**: Significant volatility expected - suitable for experienced investors. "
             elif risk_score > 50:
-                summary += "📈 **Moderate-Risk Profile**: Balanced approach with manageable volatility. "
+                summary += "**Moderate-Risk Profile**: Balanced approach with manageable volatility. "
             else:
-                summary += "🛡️ **Conservative Profile**: Lower volatility with steady growth potential. "
+                summary += "**Conservative Profile**: Lower volatility with steady growth potential. "
             
             # Opportunity analysis
             if opportunity_score > 70:
-                summary += "🚀 **High Opportunity**: Strong growth signals across holdings. "
+                summary += "**High Opportunity**: Strong growth signals across holdings. "
             elif opportunity_score > 40:
-                summary += "📊 **Moderate Opportunity**: Mixed signals with selective upside. "
+                summary += "**Moderate Opportunity**: Mixed signals with selective upside. "
             else:
-                summary += "⚠️ **Limited Opportunity**: Consider rebalancing for better prospects. "
+                summary += "**Limited Opportunity**: Consider rebalancing for better prospects. "
             
             # ML-driven insights
             ml_insights = []
@@ -965,9 +953,9 @@ class PortfolioAnalyzer:
             
             # Analyze sector concentration
             if len(sectors) == 1:
-                summary += " ⚠️ All stocks in one sector increases risk."
+                summary += " All stocks in one sector increases risk."
             elif len(sectors) >= 3:
-                summary += " ✅ Good sector diversification reduces risk."
+                summary += " Good sector diversification reduces risk."
             
             return summary
             
@@ -1078,20 +1066,20 @@ class PortfolioAnalyzer:
         high_vol_stocks = [ticker for ticker, data in portfolio_data.items() 
                           if data['technical_data'].get('historical_volatility_30d', 0) > 0.6]
         if high_vol_stocks:
-            tips.append(f"💡 Consider reducing position size in high-risk stocks: {', '.join(high_vol_stocks)}")
+            tips.append(f"Consider reducing position size in high-risk stocks: {', '.join(high_vol_stocks)}")
         
         # Check for overvaluation
         expensive_stocks = [ticker for ticker, data in portfolio_data.items() 
                            if data['fundamental_data'].get('pe_ratio', 0) > 40]
         if expensive_stocks:
-            tips.append(f"💡 Monitor expensive stocks closely: {', '.join(expensive_stocks)}")
+            tips.append(f"Monitor expensive stocks closely: {', '.join(expensive_stocks)}")
         
         # General tips
         tips.extend([
-            "📚 Always do your own research before making investment decisions",
-            "⏰ Review your portfolio monthly, not daily - avoid emotional trading",
-            "💰 Never invest more than you can afford to lose",
-            "🎯 Set clear investment goals and stick to your strategy"
+            "Always do your own research before making investment decisions",
+            "Review your portfolio monthly, not daily - avoid emotional trading",
+            "Never invest more than you can afford to lose",
+            "Set clear investment goals and stick to your strategy"
         ])
         
         return tips[:5]  # Limit to 5 tips
@@ -1155,7 +1143,7 @@ class PortfolioAnalyzer:
                                  if result['overall_recommendation'] == 'SELL')
                 hold_signals = num_analyzed - buy_signals - sell_signals
                 
-                summary = f"📊 **Quantitative Analysis**: Analyzed {num_analyzed} stocks using 5 technical strategies. "
+                summary = f"**Quantitative Analysis**: Analyzed {num_analyzed} stocks using 5 technical strategies. "
                 summary += f"**Signals**: {buy_signals} BUY, {hold_signals} HOLD, {sell_signals} SELL. "
                 summary += f"**Portfolio Recommendation**: {portfolio_action} (Confidence: {confidence:.1f}%). "
                 
@@ -1168,7 +1156,7 @@ class PortfolioAnalyzer:
                 
                 quant_analysis['analysis_summary'] = summary
             else:
-                quant_analysis['analysis_summary'] = "⚠️ Unable to generate quantitative analysis - insufficient data."
+                quant_analysis['analysis_summary'] = "Unable to generate quantitative analysis - insufficient data."
             
             return quant_analysis
             
@@ -1178,5 +1166,5 @@ class PortfolioAnalyzer:
                 'strategy_signals': {},
                 'portfolio_recommendation': {},
                 'strategy_descriptions': {},
-                'analysis_summary': '⚠️ Quantitative analysis unavailable due to technical issues.'
+                'analysis_summary': 'Quantitative analysis unavailable due to technical issues.'
             }

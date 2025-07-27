@@ -10,13 +10,17 @@ from typing import Dict, List, Optional, Tuple
 from Utils.utils_api_client import APIClient
 import logging
 import requests
+from utils_shared import AnalysisBase, TechnicalIndicators, setup_logging
 
-class ETFAnalyzer:
+# Setup centralized logging
+setup_logging()
+
+class ETFAnalyzer(AnalysisBase):
     def __init__(self, finance_database=None):
         """Initialize ETF analyzer with comprehensive database"""
+        super().__init__('ETFAnalyzer')
         self.api_client = APIClient()
         self.finance_database = finance_database
-        self.logger = logging.getLogger(__name__)
         
         # Comprehensive ETF universe based on Finance Database methodology
         self.etf_universe = {
@@ -167,7 +171,7 @@ class ETFAnalyzer:
             # Technical indicators
             sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1]
             sma_200 = hist['Close'].rolling(window=200).mean().iloc[-1]
-            rsi = self._calculate_rsi(hist['Close'])
+            rsi = self.technical_indicators.calculate_rsi(hist['Close'])
             
             # Volume analysis
             avg_volume = hist['Volume'].rolling(window=20).mean().iloc[-1]
@@ -270,17 +274,7 @@ class ETFAnalyzer:
         except:
             return 0
     
-    def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> float:
-        """Calculate RSI"""
-        try:
-            delta = prices.diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
-            return rsi.iloc[-1] if not rsi.empty else 50
-        except:
-            return 50
+    # RSI calculation moved to shared utilities
     
     def _calculate_volume_trend(self, volume: pd.Series) -> str:
         """Calculate volume trend"""
@@ -436,73 +430,13 @@ class ETFAnalyzer:
             return self._create_fallback_etf_data()
     
     def _create_fallback_etf_data(self) -> Dict:
-        """Create fallback ETF data when analysis fails"""
-        fallback_data = {
+        """Return error when ETF analysis fails - no placeholder data"""
+        return {
             'timestamp': datetime.now().isoformat(),
-            'etfs': [
-                {
-                    'symbol': 'SPY',
-                    'name': 'SPDR S&P 500 ETF',
-                    'category': 'Large Cap Blend',
-                    'current_price': 450.0,
-                    'expense_ratio': 0.0945,
-                    'aum_millions': 400000,
-                    'performance_1d': 0.005,
-                    'performance_1w': 0.012,
-                    'performance_1m': 0.025,
-                    'performance_3m': 0.08,
-                    'performance_6m': 0.15,
-                    'performance_1y': 0.22,
-                    'volatility': 0.18,
-                    'max_drawdown': -0.12,
-                    'sharpe_ratio': 1.2,
-                    'sortino_ratio': 1.5
-                },
-                {
-                    'symbol': 'VTI',
-                    'name': 'Vanguard Total Stock Market',
-                    'category': 'Total Market',
-                    'current_price': 240.0,
-                    'expense_ratio': 0.03,
-                    'aum_millions': 300000,
-                    'performance_1d': 0.004,
-                    'performance_1w': 0.011,
-                    'performance_1m': 0.023,
-                    'performance_3m': 0.075,
-                    'performance_6m': 0.14,
-                    'performance_1y': 0.20,
-                    'volatility': 0.17,
-                    'max_drawdown': -0.11,
-                    'sharpe_ratio': 1.15,
-                    'sortino_ratio': 1.4
-                }
-            ],
-            'market_summary': {
-                'total_analyzed': 2,
-                'avg_expense_ratio': 0.06,
-                'total_aum': 700000,
-                'top_performers': [],
-                'worst_performers': []
-            },
-            'category_analysis': {
-                'Large Cap Blend': {
-                    'count': 1,
-                    'avg_performance': 0.22,
-                    'avg_expense_ratio': 0.0945,
-                    'total_aum': 400000
-                },
-                'Total Market': {
-                    'count': 1,
-                    'avg_performance': 0.20,
-                    'avg_expense_ratio': 0.03,
-                    'total_aum': 300000
-                }
-            },
-            'recommendations': [
-                'SPY offers broad market exposure with reasonable fees',
-                'VTI provides total market exposure with very low costs',
-                'Both ETFs suitable for long-term core holdings'
-            ]
+            'error': 'ETF analysis failed - no data available',
+            'message': 'Unable to fetch real ETF data. All APIs are unavailable.',
+            'etfs': [],
+            'market_summary': {},
+            'category_analysis': {},
+            'recommendations': []
         }
-        self.logger.info("Using fallback ETF data with SPY and VTI")
-        return fallback_data

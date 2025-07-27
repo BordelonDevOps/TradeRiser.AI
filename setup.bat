@@ -13,7 +13,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo ✓ Python is installed
+echo Python is installed
 echo.
 
 REM Create virtual environment
@@ -24,7 +24,7 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-echo ✓ Virtual environment created
+echo Virtual environment created
 echo.
 
 REM Activate virtual environment
@@ -35,13 +35,13 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-echo ✓ Virtual environment activated
+echo Virtual environment activated
 echo.
 
 REM Upgrade pip
 echo Upgrading pip...
 python -m pip install --upgrade pip
-echo ✓ Pip upgraded
+echo Pip upgraded
 echo.
 
 REM Install requirements
@@ -52,33 +52,33 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-echo ✓ Requirements installed
+echo Requirements installed
 echo.
 
 REM Copy environment file
 if not exist ".env" (
     echo Creating .env file from template...
     copy ".env.example" ".env"
-    echo ✓ .env file created
+    echo .env file created
     echo.
     echo IMPORTANT: Please edit .env file and add your API keys!
     echo Required: ALPHA_VANTAGE_API_KEY
     echo Optional: TWITTER_API_KEY, FRED_API_KEY
     echo.
 ) else (
-    echo ✓ .env file already exists
+    echo .env file already exists
     echo.
 )
 
 REM Check if Redis is available (optional)
 redis-server --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ⚠ Redis is not installed (optional for caching)
+    echo WARNING: Redis is not installed (optional for caching)
     echo You can install Redis from: https://redis.io/download
     echo The application will use in-memory caching instead
     echo.
 ) else (
-    echo ✓ Redis is available
+    echo Redis is available
     echo.
 )
 
@@ -89,7 +89,7 @@ echo.
 echo Next steps:
 echo 1. Edit .env file and add your API keys
 echo 2. Run: python run.py
-echo 3. Open http://localhost:5000 in your browser
+echo 3. Open http://localhost:5001 in your browser
 echo.
 echo For API keys:
 echo - Alpha Vantage: https://www.alphavantage.co/support/#api-key

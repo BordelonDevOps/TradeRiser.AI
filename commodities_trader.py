@@ -6,14 +6,18 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from Utils.utils_api_client import APIClient
+from utils_shared import AnalysisBase, TechnicalIndicators, setup_logging
 import logging
 
-class CommoditiesTrader:
+# Setup centralized logging
+setup_logging()
+
+class CommoditiesTrader(AnalysisBase):
     def __init__(self, finance_database=None):
         """Initialize commodities trader with market data"""
+        super().__init__('CommoditiesTrader')
         self.api_client = APIClient()
         self.finance_database = finance_database
-        self.logger = logging.getLogger(__name__)
         
         # Commodities universe with ETF symbols for easy trading
         self.commodities_universe = {
@@ -113,7 +117,7 @@ class CommoditiesTrader:
             # Calculate technical indicators
             sma_20 = hist['Close'].rolling(window=20).mean().iloc[-1]
             sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1]
-            rsi = self._calculate_rsi(hist['Close'])
+            rsi = self.technical_indicators.calculate_rsi(hist['Close'])
             volatility = hist['Close'].pct_change().std() * (252 ** 0.5)
             
             # Calculate performance metrics
@@ -155,17 +159,7 @@ class CommoditiesTrader:
             self.logger.error(f"Error analyzing commodity {symbol}: {str(e)}")
             return None
     
-    def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> float:
-        """Calculate Relative Strength Index"""
-        try:
-            delta = prices.diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
-            return rsi.iloc[-1] if not rsi.empty else 50
-        except:
-            return 50
+    # RSI calculation moved to shared utilities
     
     def _generate_commodity_signals(self, price: float, sma_20: float, sma_50: float, rsi: float, volume_ratio: float) -> Dict:
         """Generate trading signals for commodities"""
@@ -300,83 +294,14 @@ class CommoditiesTrader:
             return self._create_fallback_commodity_data()
     
     def _create_fallback_commodity_data(self) -> Dict:
-        """Create fallback commodity data when analysis fails"""
-        fallback_data = {
+        """Return error when commodity analysis fails - no placeholder data"""
+        return {
             'timestamp': datetime.now().isoformat(),
-            'commodities': [
-                {
-                    'symbol': 'GLD',
-                    'name': 'SPDR Gold Trust',
-                    'category': 'Precious Metals',
-                    'commodity': 'Gold',
-                    'current_price': 180.0,
-                    'price_change_7d': 0.005,
-                    'price_change_30d': 0.015,
-                    'price_change_1y': 0.08,
-                    'volatility': 0.15,
-                    'rsi': 55.0,
-                    'volume_ratio': 1.2,
-                    'sma_20': 178.5,
-                    'sma_50': 175.0,
-                    'signals': {
-                        'trend': 'bullish',
-                        'momentum': 'bullish',
-                        'volume': 'normal',
-                        'overbought_oversold': 'neutral'
-                    },
-                    'overall_score': 65,
-                    'recommendation': 'BUY'
-                },
-                {
-                    'symbol': 'USO',
-                    'name': 'United States Oil Fund',
-                    'category': 'Energy',
-                    'commodity': 'Crude Oil',
-                    'current_price': 75.0,
-                    'price_change_7d': -0.02,
-                    'price_change_30d': 0.05,
-                    'price_change_1y': 0.12,
-                    'volatility': 0.25,
-                    'rsi': 45.0,
-                    'volume_ratio': 0.9,
-                    'sma_20': 76.0,
-                    'sma_50': 73.0,
-                    'signals': {
-                        'trend': 'neutral',
-                        'momentum': 'bearish',
-                        'volume': 'normal',
-                        'overbought_oversold': 'neutral'
-                    },
-                    'overall_score': 50,
-                    'recommendation': 'HOLD'
-                }
-            ],
-            'market_summary': {
-                'total_analyzed': 2,
-                'bullish_signals': 1,
-                'bearish_signals': 0,
-                'neutral_signals': 1
-            },
-            'sector_performance': {
-                'Precious Metals': [
-                    {'symbol': 'GLD', 'performance': 0.015, 'score': 65}
-                ],
-                'Energy': [
-                    {'symbol': 'USO', 'performance': 0.05, 'score': 50}
-                ]
-            },
-            'top_performers': [
-                {
-                    'symbol': 'GLD',
-                    'name': 'SPDR Gold Trust',
-                    'overall_score': 65,
-                    'recommendation': 'BUY'
-                }
-            ],
-            'recommendations': [
-                'Mixed signals in commodities market - proceed with caution',
-                'Precious Metals sector showing strong performance'
-            ]
+            'error': 'Commodity analysis failed - no data available',
+            'message': 'Unable to fetch real commodity data. All APIs are unavailable.',
+            'commodities': [],
+            'market_summary': {},
+            'sector_performance': {},
+            'top_performers': [],
+            'recommendations': []
         }
-        self.logger.info("Using fallback commodity data with GLD and USO")
-        return fallback_data

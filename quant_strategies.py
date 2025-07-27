@@ -188,19 +188,55 @@ class QuantStrategies:
             'awesome_oscillator': 'Awesome Oscillator - Enhanced momentum analysis using high-low midpoint'
         }
 
-# Example usage and testing
-if __name__ == "__main__":
-    quant = QuantStrategies()
-    
-    # Test with a sample ticker
-    result = quant.analyze_ticker("AAPL", "6mo")
-    print("Sample Analysis for AAPL:")
-    print(f"Overall Recommendation: {result.get('overall_recommendation', {})}")
-    
-    for strategy, data in result.get('strategies', {}).items():
-        print(f"\n{strategy.upper()}: {data.get('signal', 'N/A')} (Confidence: {data.get('confidence', 0)})")
-        if 'description' in data:
-            print(f"  {data['description']}")
+    def rsi_pattern_strategy(self, data: pd.DataFrame) -> Dict:
+        """
+        RSI Pattern Recognition Strategy
+        Identifies overbought/oversold conditions and divergence patterns
+        """
+        try:
+            close = data['Close']
+            
+            # Calculate RSI
+            delta = close.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            
+            current_rsi = rsi.iloc[-1]
+            
+            # Pattern recognition
+            if current_rsi > 70:
+                signal = 'SELL'
+                confidence = min((current_rsi - 70) / 30, 1.0)
+                pattern = 'Overbought'
+            elif current_rsi < 30:
+                signal = 'BUY'
+                confidence = min((30 - current_rsi) / 30, 1.0)
+                pattern = 'Oversold'
+            elif current_rsi > 50:
+                signal = 'HOLD'
+                confidence = 0.6
+                pattern = 'Bullish Momentum'
+            else:
+                signal = 'HOLD'
+                confidence = 0.4
+                pattern = 'Bearish Momentum'
+            
+            return {
+                'signal': signal,
+                'confidence': round(confidence, 3),
+                'rsi': round(current_rsi, 2),
+                'pattern': pattern,
+                'description': 'RSI pattern recognition for momentum and reversal signals'
+            }
+            
+        except Exception as e:
+            return {
+                'error': str(e),
+                'signal': 'HOLD',
+                'confidence': 0.0
+            }
     
     def parabolic_sar_strategy(self, data: pd.DataFrame) -> Dict:
         """
@@ -399,53 +435,17 @@ if __name__ == "__main__":
                 'signal': 'HOLD',
                 'confidence': 0.0
             }
+
+# Example usage and testing
+if __name__ == "__main__":
+    quant = QuantStrategies()
     
-    def rsi_pattern_strategy(self, data: pd.DataFrame) -> Dict:
-        """
-        RSI Pattern Recognition Strategy
-        Identifies overbought/oversold conditions and divergence patterns
-        """
-        try:
-            close = data['Close']
-            
-            # Calculate RSI
-            delta = close.diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
-            
-            current_rsi = rsi.iloc[-1]
-            
-            # Pattern recognition
-            if current_rsi > 70:
-                signal = 'SELL'
-                confidence = min((current_rsi - 70) / 30, 1.0)
-                pattern = 'Overbought'
-            elif current_rsi < 30:
-                signal = 'BUY'
-                confidence = min((30 - current_rsi) / 30, 1.0)
-                pattern = 'Oversold'
-            elif current_rsi > 50:
-                signal = 'HOLD'
-                confidence = 0.6
-                pattern = 'Bullish Momentum'
-            else:
-                signal = 'HOLD'
-                confidence = 0.4
-                pattern = 'Bearish Momentum'
-            
-            return {
-                'signal': signal,
-                'confidence': round(confidence, 3),
-                'rsi': round(current_rsi, 2),
-                'pattern': pattern,
-                'description': 'RSI pattern recognition for momentum and reversal signals'
-            }
-            
-        except Exception as e:
-            return {
-                'error': str(e),
-                'signal': 'HOLD',
-                'confidence': 0.0
-            }
+    # Test with a sample ticker
+    result = quant.analyze_ticker("AAPL", "6mo")
+    print("Sample Analysis for AAPL:")
+    print(f"Overall Recommendation: {result.get('overall_recommendation', {})}")
+    
+    for strategy, data in result.get('strategies', {}).items():
+        print(f"\n{strategy.upper()}: {data.get('signal', 'N/A')} (Confidence: {data.get('confidence', 0)})")
+        if 'description' in data:
+            print(f"  {data['description']}")
