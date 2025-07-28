@@ -17,7 +17,7 @@ def load_environment():
     # Set default environment variables for production
     os.environ.setdefault('FLASK_ENV', 'production')
     os.environ.setdefault('HOST', '0.0.0.0')
-    os.environ.setdefault('PORT', '8000')
+    # Let AWS Amplify handle port assignment automatically
     
     # Load .env file if it exists
     env_file = project_root / '.env'
@@ -40,7 +40,7 @@ try:
     
     if __name__ == '__main__':
         # For local testing
-        port = int(os.environ.get('PORT', 8000))
+        port = int(os.environ.get('PORT', 5000))
         application.run(host='0.0.0.0', port=port, debug=False)
         
 except ImportError as e:

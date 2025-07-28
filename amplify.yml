@@ -1,36 +1,20 @@
 version: 1
-backend:
-  phases:
-    build:
-      commands:
-        - echo "Installing Python dependencies"
-        - python3 -m pip install --upgrade pip
-        - python3 -m pip install -r requirements.txt
-        - echo "Testing Flask application import"
-        - python3 -c "import application; print('Flask app imported successfully')"
-        - echo "Starting Flask application with Waitress"
-        - nohup python3 -c "from waitress import serve; import application; serve(application.app, host='0.0.0.0', port=8000)" &
-        - sleep 5
-        - echo "Flask backend started on port 8000"
 frontend:
   phases:
     preBuild:
       commands:
-        - echo "Preparing frontend assets"
+        - echo "Installing Python dependencies"
+        - python3 -m pip install --upgrade pip
+        - python3 -m pip install -r requirements.txt
     build:
       commands:
-        - echo "Building frontend"
-        - echo "Frontend build completed"
+        - echo "Testing Flask application"
+        - python3 -c "import application; print('Flask app imported successfully')"
+        - echo "Build completed"
   artifacts:
     baseDirectory: .
     files:
-      - index.html
-      - '**/*.css'
-      - '**/*.js'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.svg'
-      - '**/*.ico'
+      - '**/*'
   cache:
     paths:
       - ~/.cache/pip/**/*
