@@ -10,6 +10,18 @@ import logging
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
+import requests
+
+# Load environment variables with priority: .env.local > .env
+try:
+    from dotenv import load_dotenv
+    # Load .env first (template/defaults)
+    load_dotenv('.env')
+    # Load .env.local second (actual keys, overrides .env)
+    load_dotenv('.env.local', override=True)
+    print("Environment variables loaded successfully")
+except ImportError:
+    print("python-dotenv not available, using system environment variables")
 
 # Financial Libraries Integration
 try:
@@ -52,13 +64,18 @@ except ImportError:
     yf = None
     YFINANCE_AVAILABLE = False
 
-# Finnhub API integration
+# Finnhub API integration (temporary setup)
 try:
     import finnhub
-    FINNHUB_AVAILABLE = True
-    FINNHUB_API_KEY = "d21r4c1r01qquiqnqf00d21r4c1r01qquiqnqf0g"
-    finnhub_client = finnhub.Client(api_key=FINNHUB_API_KEY)
-    print("Finnhub API available for real-time market data")
+    FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+    if FINNHUB_API_KEY and FINNHUB_API_KEY != 'your_finnhub_api_key_here':
+        finnhub_client = finnhub.Client(api_key=FINNHUB_API_KEY)
+        FINNHUB_AVAILABLE = True
+        print("Finnhub API available for real-time market data")
+    else:
+        finnhub_client = None
+        FINNHUB_AVAILABLE = False
+        print("Finnhub API key not configured")
 except ImportError:
     print("Finnhub not available")
     finnhub = None
@@ -76,6 +93,171 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Security Functions (defined after logger)
+def mask_api_key(api_key: str) -> str:
+    """Mask API key for logging purposes"""
+    if not api_key or len(api_key) < 8:
+        return "[INVALID_KEY]"
+    return f"{api_key[:4]}{'*' * (len(api_key) - 8)}{api_key[-4:]}"
+
+def get_secure_api_key(key_name: str) -> Optional[str]:
+    """Securely retrieve API key from environment"""
+    api_key = os.getenv(key_name)
+    if api_key and api_key != f"your_{key_name.lower()}_here":
+        return api_key
+    return None
+
+def log_api_status(service_name: str, api_key: str, available: bool):
+    """Log API status with masked key"""
+    if os.getenv('LOG_SENSITIVE_DATA', 'false').lower() == 'true':
+        logger.info(f"{service_name} API: {'Available' if available else 'Unavailable'} - Key: {mask_api_key(api_key) if api_key else 'Not configured'}")
+    else:
+        logger.info(f"{service_name} API: {'Available' if available else 'Unavailable'}")
+
+# Log API status for Finnhub
+if FINNHUB_AVAILABLE and FINNHUB_API_KEY:
+    log_api_status("Finnhub", FINNHUB_API_KEY, True)
+
+# Security Configuration (after security functions are defined)
+app.config['SECRET_KEY'] = get_secure_api_key('SECRET_KEY') or 'dev-key-change-in-production'
+app.config['WTF_CSRF_ENABLED'] = True
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Security headers
+@app.after_request
+def security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    if os.getenv('FLASK_ENV') == 'production':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
+def generate_crypto_recommendation(current_price: float, change_24h: float, symbol: str) -> dict:
+    """Generate Buy/Hold/Sell recommendation for cryptocurrency based on technical analysis"""
+    try:
+        # Fetch additional market data for better analysis
+        symbol_mapping = {
+            'BTC': 'bitcoin', 'ETH': 'ethereum', 'XRP': 'ripple', 'ADA': 'cardano',
+            'DOT': 'polkadot', 'LINK': 'chainlink', 'LTC': 'litecoin', 'BCH': 'bitcoin-cash',
+            'XLM': 'stellar', 'DOGE': 'dogecoin', 'SOL': 'solana', 'MATIC': 'matic-network'
+        }
+        
+        coin_id = symbol_mapping.get(symbol, symbol.lower())
+        
+        # Get 7-day price history for trend analysis
+        history_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days=7"
+        response = requests.get(history_url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            prices = [price[1] for price in data['prices']]
+            
+            # Calculate technical indicators
+            if len(prices) >= 7:
+                # 7-day price trend
+                price_7d_ago = prices[0]
+                price_change_7d = ((current_price - price_7d_ago) / price_7d_ago) * 100
+                
+                # Simple moving average (3-day)
+                recent_prices = prices[-3:]
+                sma_3 = sum(recent_prices) / len(recent_prices)
+                
+                # Volatility calculation
+                price_changes = []
+                for i in range(1, len(prices)):
+                    change = ((prices[i] - prices[i-1]) / prices[i-1]) * 100
+                    price_changes.append(abs(change))
+                volatility = sum(price_changes) / len(price_changes) if price_changes else 0
+                
+                # Generate recommendation based on multiple factors
+                score = 0
+                reasoning_parts = []
+                
+                # Factor 1: 24h momentum
+                if change_24h > 5:
+                    score += 2
+                    reasoning_parts.append(f"Strong 24h gain (+{change_24h:.1f}%)")
+                elif change_24h > 2:
+                    score += 1
+                    reasoning_parts.append(f"Positive 24h momentum (+{change_24h:.1f}%)")
+                elif change_24h < -5:
+                    score -= 2
+                    reasoning_parts.append(f"Significant 24h decline ({change_24h:.1f}%)")
+                elif change_24h < -2:
+                    score -= 1
+                    reasoning_parts.append(f"Negative 24h momentum ({change_24h:.1f}%)")
+                
+                # Factor 2: 7-day trend
+                if price_change_7d > 10:
+                    score += 2
+                    reasoning_parts.append(f"Strong weekly uptrend (+{price_change_7d:.1f}%)")
+                elif price_change_7d > 3:
+                    score += 1
+                    reasoning_parts.append(f"Positive weekly trend (+{price_change_7d:.1f}%)")
+                elif price_change_7d < -10:
+                    score -= 2
+                    reasoning_parts.append(f"Weak weekly performance ({price_change_7d:.1f}%)")
+                elif price_change_7d < -3:
+                    score -= 1
+                    reasoning_parts.append(f"Declining weekly trend ({price_change_7d:.1f}%)")
+                
+                # Factor 3: Price vs SMA
+                if current_price > sma_3 * 1.02:
+                    score += 1
+                    reasoning_parts.append("Price above 3-day average")
+                elif current_price < sma_3 * 0.98:
+                    score -= 1
+                    reasoning_parts.append("Price below 3-day average")
+                
+                # Factor 4: Volatility assessment
+                if volatility > 8:
+                    score -= 1
+                    reasoning_parts.append(f"High volatility ({volatility:.1f}%)")
+                elif volatility < 3:
+                    score += 1
+                    reasoning_parts.append(f"Low volatility ({volatility:.1f}%)")
+                
+                # Generate final recommendation
+                if score >= 3:
+                    action = "BUY"
+                    confidence = min(85 + (score - 3) * 5, 95)
+                elif score >= 1:
+                    action = "BUY"
+                    confidence = 65 + (score - 1) * 10
+                elif score <= -3:
+                    action = "SELL"
+                    confidence = min(85 + abs(score + 3) * 5, 95)
+                elif score <= -1:
+                    action = "SELL"
+                    confidence = 65 + abs(score + 1) * 10
+                else:
+                    action = "HOLD"
+                    confidence = 60
+                
+                reasoning = "; ".join(reasoning_parts) if reasoning_parts else "Neutral market conditions"
+                
+                return {
+                    'action': action,
+                    'confidence': confidence,
+                    'reasoning': reasoning,
+                    'score': score
+                }
+        
+        # Fallback recommendation based on 24h change only
+        if change_24h > 5:
+            return {'action': 'BUY', 'confidence': 70, 'reasoning': f'Strong 24h gain (+{change_24h:.1f}%)', 'score': 1}
+        elif change_24h < -5:
+            return {'action': 'SELL', 'confidence': 70, 'reasoning': f'Significant 24h decline ({change_24h:.1f}%)', 'score': -1}
+        else:
+            return {'action': 'HOLD', 'confidence': 60, 'reasoning': f'Moderate 24h change ({change_24h:.1f}%)', 'score': 0}
+            
+    except Exception as e:
+        logger.error(f"Error generating recommendation for {symbol}: {e}")
+        return {'action': 'HOLD', 'confidence': 50, 'reasoning': 'Unable to analyze market data', 'score': 0}
 
 class FinancialLibrariesIntegration:
     """Integration wrapper for advanced financial libraries"""
@@ -731,15 +913,69 @@ def analyze_crypto():
         if not symbols:
             return jsonify({'error': 'No crypto symbols provided'})
         
-        # Mock crypto analysis - in production, integrate with crypto APIs
-        total_value = sum([1000 * (i + 1) for i in range(len(symbols))]) if holdings else len(symbols) * 1000
-        total_change = (hash(''.join(symbols)) % 20 - 10) / 100  # Mock change between -10% and +10%
+        # Real crypto analysis using CoinGecko API
+        total_value = 0
+        total_change_weighted = 0
+        crypto_data = {}
+        
+        # Map common symbols to CoinGecko IDs
+        symbol_mapping = {
+            'BTC': 'bitcoin', 'ETH': 'ethereum', 'XRP': 'ripple', 'ADA': 'cardano',
+            'DOT': 'polkadot', 'LINK': 'chainlink', 'LTC': 'litecoin', 'BCH': 'bitcoin-cash',
+            'XLM': 'stellar', 'DOGE': 'dogecoin', 'SOL': 'solana', 'MATIC': 'matic-network'
+        }
+        
+        for i, symbol in enumerate(symbols):
+            try:
+                coin_id = symbol_mapping.get(symbol.upper(), symbol.lower())
+                
+                # Fetch real-time data from CoinGecko
+                url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd&include_24hr_change=true"
+                response = requests.get(url, timeout=10)
+                
+                if response.status_code == 200:
+                    price_data = response.json()
+                    if coin_id in price_data:
+                        current_price = price_data[coin_id]['usd']
+                        change_24h = price_data[coin_id].get('usd_24h_change', 0)
+                        
+                        # Calculate value based on holdings or assume 1 unit
+                        holding_amount = float(holdings[i]) if holdings and i < len(holdings) and holdings[i] else 1
+                        value = current_price * holding_amount
+                        
+                        total_value += value
+                        total_change_weighted += (change_24h * value)
+                        
+                        # Generate individual trading recommendation
+                        recommendation = generate_crypto_recommendation(current_price, change_24h, symbol.upper())
+                        
+                        crypto_data[symbol.upper()] = {
+                            'price': current_price,
+                            'change_24h': change_24h,
+                            'holding': holding_amount,
+                            'value': value,
+                            'recommendation': recommendation['action'],
+                            'confidence': recommendation['confidence'],
+                            'reasoning': recommendation['reasoning']
+                        }
+                    else:
+                        return jsonify({'error': f'Cryptocurrency {symbol} not found'})
+                else:
+                    return jsonify({'error': f'Failed to fetch data for {symbol}'})
+                    
+            except Exception as e:
+                return jsonify({'error': f'Error fetching data for {symbol}: {str(e)}'})
+        
+        # Calculate weighted average change
+        total_change = (total_change_weighted / total_value) if total_value > 0 else 0
         
         results = {
-            'total_value': total_value,
-            'total_change': total_change,
+            'total_value': round(total_value, 2),
+            'total_change': round(total_change, 2),
             'diversification_score': min(len(symbols), 10),
-            'recommendation': f"Your crypto portfolio shows {'good' if len(symbols) >= 3 else 'limited'} diversification. Consider {'maintaining' if total_change >= 0 else 'rebalancing'} your positions."
+            'crypto_details': crypto_data,
+            'recommendation': f"Your crypto portfolio shows {'good' if len(symbols) >= 3 else 'limited'} diversification. Consider {'maintaining' if total_change >= 0 else 'rebalancing'} your positions.",
+            'data_source': 'CoinGecko API (Real-Time)'
         }
         
         return jsonify(results)
@@ -756,101 +992,366 @@ def find_defi_opportunities():
         if not protocols or amount < 100:
             return jsonify({'error': 'Invalid protocols or amount'})
         
-        # Mock DeFi opportunities - in production, integrate with DeFi APIs
-        mock_opportunities = [
-            {'protocol': 'Compound', 'apy': 4.5, 'description': 'Lending USDC with low risk'},
-            {'protocol': 'Aave', 'apy': 5.2, 'description': 'Variable rate lending with good liquidity'},
-            {'protocol': 'Uniswap V3', 'apy': 8.7, 'description': 'Liquidity provision with impermanent loss risk'},
-            {'protocol': 'Curve', 'apy': 6.3, 'description': 'Stablecoin pools with lower volatility'}
-        ]
+        # DeFi opportunities require real-time integration with DeFi protocols
+        # This would need APIs from DeFiPulse, DeBank, or direct protocol APIs
+        return jsonify({
+            'error': 'DeFi opportunities analysis requires real-time protocol integration',
+            'message': 'This feature needs integration with DeFi protocol APIs (Compound, Aave, Uniswap, etc.) to provide accurate yield data',
+            'requested_protocols': protocols,
+            'investment_amount': amount,
+            'status': 'Feature requires real API integration - no mock data available'
+        })
         
-        # Filter by selected protocols
-        filtered_opportunities = [opp for opp in mock_opportunities if opp['protocol'] in protocols]
-        
-        results = {
-            'opportunities': filtered_opportunities[:3],  # Top 3 opportunities
-            'total_protocols': len(protocols),
-            'investment_amount': amount
-        }
-        
-        return jsonify(results)
     except Exception as e:
         return jsonify({'error': str(e)})
 
+@app.route('/api/portfolio/analyze', methods=['POST'])
+def portfolio_analyze():
+    try:
+        data = request.get_json()
+        tickers = data.get('tickers', [])
+        holdings = data.get('holdings', {})
+        weights = data.get('weights', [])
+        
+        if not tickers and not holdings:
+            return jsonify({'error': 'Please provide tickers or holdings data'})
+        
+        # Use holdings if provided, otherwise use tickers with equal weights
+        if holdings:
+            tickers = list(holdings.keys())
+        elif weights and len(weights) == len(tickers):
+            # Use provided weights
+            pass
+        else:
+            # Equal weights
+            weights = [1.0/len(tickers)] * len(tickers)
+        
+        # Get real-time data for portfolio analysis
+        portfolio_data = {}
+        total_value = 0
+        price_changes = []
+        
+        for i, ticker in enumerate(tickers):
+            try:
+                # Get real-time data from Finnhub or YFinance
+                if FINNHUB_AVAILABLE:
+                    quote = finnhub_client.quote(ticker)
+                    current_price = quote.get('c', 0)
+                    change_percent = quote.get('dp', 0) / 100
+                else:
+                    # Fallback to YFinance
+                    stock = yf.Ticker(ticker)
+                    hist = stock.history(period='2d')
+                    if not hist.empty:
+                        current_price = hist['Close'].iloc[-1]
+                        prev_price = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
+                        change_percent = (current_price - prev_price) / prev_price if prev_price > 0 else 0
+                    else:
+                        current_price = 0
+                        change_percent = 0
+                
+                # Calculate position value
+                if holdings and ticker in holdings:
+                    shares = holdings[ticker]
+                    position_value = current_price * shares
+                else:
+                    # Use weights for theoretical portfolio
+                    weight = weights[i] if i < len(weights) else (1.0/len(tickers))
+                    position_value = 10000 * weight  # Assume $10k portfolio
+                    shares = position_value / current_price if current_price > 0 else 0
+                
+                portfolio_data[ticker] = {
+                    'current_price': current_price,
+                    'shares': shares,
+                    'value': position_value,
+                    'change_percent': change_percent
+                }
+                
+                total_value += position_value
+                price_changes.append(change_percent)
+                
+            except Exception as e:
+                logger.error(f"Error analyzing {ticker}: {str(e)}")
+                continue
+        
+        # Calculate portfolio metrics
+        if price_changes:
+            avg_return = sum(price_changes) / len(price_changes)
+            volatility = (sum((x - avg_return) ** 2 for x in price_changes) / len(price_changes)) ** 0.5
+            sharpe_ratio = avg_return / volatility if volatility > 0 else 0
+            max_drawdown = min(price_changes) if price_changes else 0
+        else:
+            avg_return = 0
+            volatility = 0
+            sharpe_ratio = 0
+            max_drawdown = 0
+        
+        # Calculate diversification score (simple metric based on number of holdings)
+        diversification_score = min(len(tickers) / 10, 1.0)  # Max score of 1.0 for 10+ holdings
+        
+        # Generate investment tips based on analysis
+        tips = []
+        if len(tickers) < 5:
+            tips.append("Consider adding more holdings to improve diversification")
+        if volatility > 0.3:
+            tips.append("Your portfolio shows high volatility - consider adding stable assets")
+        if sharpe_ratio < 0.5:
+            tips.append("Risk-adjusted returns could be improved - review your asset allocation")
+        if not tips:
+            tips.append("Your portfolio shows good balance and diversification")
+        
+        return jsonify({
+            'portfolio_value': total_value,
+            'total_return': avg_return,
+            'annualized_return': avg_return * 252,  # Approximate annualization
+            'volatility': volatility,
+            'sharpe_ratio': sharpe_ratio,
+            'max_drawdown': max_drawdown,
+            'diversification_score': diversification_score,
+            'holdings': portfolio_data,
+            'investment_tips': tips
+        })
+        
+    except Exception as e:
+        logger.error(f"Portfolio analysis error: {str(e)}")
+        return jsonify({'error': f'Portfolio analysis failed: {str(e)}'})
+
 @app.route('/api/investment/wizard', methods=['POST'])
 def investment_wizard():
+    """Smart Investment Wizard with comprehensive personalized recommendations"""
     try:
         data = request.json
+        
+        # Basic required fields
         amount = data.get('amount', 0)
         situation = data.get('situation', '')
         timeline = data.get('timeline', '')
         risk_tolerance = data.get('risk_tolerance', '')
         goals = data.get('goals', '')
         
+        # New comprehensive fields
+        annual_income = data.get('annual_income', '')
+        debt_level = data.get('debt_level', '')
+        emergency_fund = data.get('emergency_fund', '')
+        liquidity_needs = data.get('liquidity_needs', '')
+        investment_experience = data.get('investment_experience', '')
+        experience_assets = data.get('experience_assets', [])
+        investment_preferences = data.get('investment_preferences', '')
+        assets_to_avoid = data.get('assets_to_avoid', [])
+        return_expectations = data.get('return_expectations', '')
+        tax_bracket = data.get('tax_bracket', '')
+        income_changes = data.get('income_changes', '')
+        tax_accounts = data.get('tax_accounts', [])
+        upcoming_expenses = data.get('upcoming_expenses', [])
+        estate_planning = data.get('estate_planning', '')
+        management_style = data.get('management_style', '')
+        insurance_coverage = data.get('insurance_coverage', [])
+        special_circumstances = data.get('special_circumstances', [])
+        
         if amount < 100 or not all([situation, timeline, risk_tolerance, goals]):
             return jsonify({'error': 'Invalid input parameters'})
         
-        # NLP-driven investment recommendations based on user input
-        # In production, this would use advanced NLP and real market data
+        # Generate comprehensive personalized investment recommendations
+        recommendations = generate_investment_recommendations(
+            amount, situation, timeline, risk_tolerance, goals,
+            annual_income, debt_level, emergency_fund, liquidity_needs,
+            investment_experience, experience_assets, investment_preferences,
+            assets_to_avoid, return_expectations, tax_bracket, income_changes,
+            tax_accounts, upcoming_expenses, estate_planning, management_style,
+            insurance_coverage, special_circumstances
+        )
         
-        # Determine strategy based on risk tolerance and timeline
-        if risk_tolerance.lower() in ['low', 'conservative']:
-            if timeline.lower() in ['short', '1-2 years']:
-                strategy = "Focus on high-yield savings accounts and short-term bonds for capital preservation."
-                allocation = [
-                    {'type': 'High-Yield Savings', 'percentage': 60},
-                    {'type': 'Short-Term Bonds', 'percentage': 30},
-                    {'type': 'Conservative ETFs', 'percentage': 10}
-                ]
-            else:
-                strategy = "Build a conservative portfolio with bonds and dividend-paying stocks."
-                allocation = [
-                    {'type': 'Bond Index Funds', 'percentage': 50},
-                    {'type': 'Dividend ETFs', 'percentage': 30},
-                    {'type': 'Large-Cap Stocks', 'percentage': 20}
-                ]
-        elif risk_tolerance.lower() in ['moderate', 'balanced']:
-            strategy = "Balanced approach with mix of stocks and bonds for steady growth."
-            allocation = [
-                {'type': 'Stock Index Funds', 'percentage': 60},
-                {'type': 'Bond Index Funds', 'percentage': 30},
-                {'type': 'International ETFs', 'percentage': 10}
-            ]
-        else:  # High risk tolerance
-            if 'retirement' in goals.lower():
-                strategy = "Aggressive growth strategy focused on long-term wealth building."
-                allocation = [
-                    {'type': 'Growth Stocks', 'percentage': 70},
-                    {'type': 'Small-Cap ETFs', 'percentage': 20},
-                    {'type': 'Emerging Markets', 'percentage': 10}
-                ]
-            else:
-                strategy = "High-growth portfolio with focus on technology and innovation."
-                allocation = [
-                    {'type': 'Tech ETFs', 'percentage': 50},
-                    {'type': 'Growth Stocks', 'percentage': 30},
-                    {'type': 'Crypto (small allocation)', 'percentage': 20}
-                ]
+        return jsonify(recommendations)
         
-        # Generate next steps based on amount and situation
-        if amount < 1000:
-            next_steps = "Start with a low-cost robo-advisor or target-date fund. Focus on building an emergency fund first."
-        elif amount < 10000:
-            next_steps = "Consider opening a brokerage account and investing in broad market ETFs. Automate monthly contributions."
-        else:
-            next_steps = "Diversify across multiple asset classes. Consider tax-advantaged accounts and professional advice."
-        
-        results = {
-            'strategy': strategy,
-            'allocation': allocation,
-            'next_steps': next_steps,
-            'risk_profile': risk_tolerance,
-            'investment_timeline': timeline
-        }
-        
-        return jsonify(results)
     except Exception as e:
+        logger.error(f"Error in investment wizard: {e}")
         return jsonify({'error': str(e)})
+
+def generate_investment_recommendations(amount, situation, timeline, risk_tolerance, goals,
+                                       annual_income='', debt_level='', emergency_fund='', liquidity_needs='',
+                                       investment_experience='', experience_assets=[], investment_preferences='',
+                                       assets_to_avoid=[], return_expectations='', tax_bracket='', income_changes='',
+                                       tax_accounts=[], upcoming_expenses=[], estate_planning='', management_style='',
+                                       insurance_coverage=[], special_circumstances=[]):
+    """Generate comprehensive personalized investment recommendations based on detailed user profile"""
+    
+    # Enhanced risk-based asset allocation with experience adjustments
+    base_risk_profiles = {
+        'conservative': {'stocks': 30, 'bonds': 60, 'cash': 10},
+        'moderate': {'stocks': 60, 'bonds': 30, 'cash': 10},
+        'aggressive': {'stocks': 80, 'bonds': 15, 'cash': 5}
+    }
+    
+    # Experience-based adjustments
+    experience_adjustments = {
+        'beginner': {'stocks': -10, 'bonds': +5, 'cash': +5},
+        'intermediate': {'stocks': 0, 'bonds': 0, 'cash': 0},
+        'advanced': {'stocks': +5, 'bonds': -3, 'cash': -2}
+    }
+    
+    # Income-based adjustments
+    income_adjustments = {
+        'low': {'stocks': -5, 'bonds': +3, 'cash': +2},
+        'medium': {'stocks': 0, 'bonds': 0, 'cash': 0},
+        'high': {'stocks': +5, 'bonds': -2, 'cash': -3}
+    }
+    
+    # Timeline adjustments
+    timeline_adjustments = {
+        'short': {'stocks': -20, 'bonds': +15, 'cash': +5},
+        'medium': {'stocks': 0, 'bonds': 0, 'cash': 0},
+        'long': {'stocks': +15, 'bonds': -8, 'cash': -7}
+    }
+    
+    # Enhanced goal-based strategies
+    goal_strategies = {
+        'retirement': 'Long-term wealth accumulation with tax-advantaged growth and compound returns',
+        'education': 'Education-focused savings with 529 plans and conservative growth strategies',
+        'house': 'Capital preservation with moderate growth for down payment accumulation',
+        'wealth': 'Diversified growth strategy emphasizing long-term compound returns',
+        'income': 'Income-generating portfolio with dividend stocks, REITs, and bonds'
+    }
+    
+    # Get base allocation
+    base_allocation = base_risk_profiles.get(risk_tolerance.lower(), base_risk_profiles['moderate'])
+    
+    # Apply experience adjustments
+    exp_key = 'beginner' if investment_experience.lower() in ['beginner', 'none'] else 'advanced' if investment_experience.lower() == 'advanced' else 'intermediate'
+    exp_adj = experience_adjustments[exp_key]
+    
+    # Apply income adjustments
+    income_key = 'low' if annual_income.lower() in ['under-50k', 'low'] else 'high' if annual_income.lower() in ['over-150k', 'high'] else 'medium'
+    income_adj = income_adjustments[income_key]
+    
+    # Apply timeline adjustments
+    timeline_key = 'short' if 'short' in timeline.lower() else 'long' if 'long' in timeline.lower() else 'medium'
+    timeline_adj = timeline_adjustments[timeline_key]
+    
+    # Calculate final allocation
+    final_allocation = {
+        'stocks': max(10, min(90, base_allocation['stocks'] + exp_adj['stocks'] + income_adj['stocks'] + timeline_adj['stocks'])),
+        'bonds': max(5, min(80, base_allocation['bonds'] + exp_adj['bonds'] + income_adj['bonds'] + timeline_adj['bonds'])),
+        'cash': max(5, min(30, base_allocation['cash'] + exp_adj['cash'] + income_adj['cash'] + timeline_adj['cash']))
+    }
+    
+    # Normalize to 100%
+    total = sum(final_allocation.values())
+    final_allocation = {k: round(v * 100 / total) for k, v in final_allocation.items()}
+    
+    # Generate specific recommendations based on preferences and experience
+    stock_recommendations = []
+    bond_recommendations = []
+    alternative_recommendations = []
+    
+    # Stock recommendations based on experience and preferences
+    if final_allocation['stocks'] > 0:
+        if 'stocks' in experience_assets or investment_experience.lower() == 'advanced':
+            if risk_tolerance.lower() == 'aggressive':
+                stock_recommendations = ['VTI (Total Stock Market)', 'VGT (Technology Sector)', 'VWO (Emerging Markets)', 'ARKK (Innovation ETF)']
+            elif risk_tolerance.lower() == 'conservative':
+                stock_recommendations = ['VTI (Total Stock Market)', 'SCHD (Dividend Aristocrats)', 'VYM (High Dividend Yield)']
+            else:
+                stock_recommendations = ['VTI (Total Stock Market)', 'VXUS (International Developed)', 'VGT (Technology)']
+        else:
+            # Beginner-friendly options
+            stock_recommendations = ['VTI (Total Stock Market)', 'VOO (S&P 500)', 'Target Date Fund for ' + str(2065 if timeline_key == 'long' else 2035)]
+    
+    # Bond recommendations based on tax situation
+    if final_allocation['bonds'] > 0:
+        if tax_bracket.lower() in ['high', '32%', '35%', '37%']:
+            bond_recommendations = ['VTEB (Tax-Exempt Municipal Bonds)', 'BND (Total Bond Market)']
+        elif timeline_key == 'short':
+            bond_recommendations = ['BND (Total Bond Market)', 'VGSH (Short-Term Treasury)', 'VTIP (Inflation-Protected)']
+        else:
+            bond_recommendations = ['BND (Total Bond Market)', 'VGIT (Intermediate Treasury)', 'VTIP (Inflation-Protected)']
+    
+    # Alternative investments for advanced investors
+    if investment_experience.lower() == 'advanced' and 'realestate' in experience_assets:
+        alternative_recommendations = ['VNQ (Real Estate Investment Trusts)', 'VTEB (Municipal Bonds)']
+    elif 'crypto' in experience_assets and risk_tolerance.lower() == 'aggressive':
+        alternative_recommendations = ['Consider 5% allocation to Bitcoin ETF (BITO) - High Risk']
+    
+    # Filter out avoided assets
+    if assets_to_avoid:
+        if 'fossil-fuels' in assets_to_avoid:
+            stock_recommendations = [rec + ' (ESG Version)' if 'VTI' in rec else rec for rec in stock_recommendations]
+        if 'crypto' in assets_to_avoid:
+            alternative_recommendations = [rec for rec in alternative_recommendations if 'Bitcoin' not in rec]
+    
+    # Calculate dollar amounts
+    stock_amount = amount * final_allocation['stocks'] / 100
+    bond_amount = amount * final_allocation['bonds'] / 100
+    cash_amount = amount * final_allocation['cash'] / 100
+    
+    # Generate tax strategy recommendations
+    tax_strategy = []
+    if 'retirement' in goals.lower():
+        if '401k' in tax_accounts:
+            tax_strategy.append('Maximize 401(k) employer match first')
+        if 'roth-ira' in tax_accounts:
+            tax_strategy.append('Consider Roth IRA for tax-free growth')
+        else:
+            tax_strategy.append('Open Roth IRA for tax-free retirement growth')
+    
+    if tax_bracket.lower() in ['high', '32%', '35%', '37%']:
+        tax_strategy.append('Prioritize tax-advantaged accounts and municipal bonds')
+    
+    # Generate personalized insights
+    ai_insights = []
+    
+    if debt_level.lower() in ['high', 'significant']:
+        ai_insights.append('⚠️ Consider paying down high-interest debt before investing')
+    
+    if emergency_fund.lower() in ['none', 'insufficient']:
+        ai_insights.append('🛡️ Build 3-6 months emergency fund before aggressive investing')
+        final_allocation['cash'] = max(final_allocation['cash'], 20)
+    
+    if 'home-purchase' in upcoming_expenses:
+        ai_insights.append('🏠 Keep house down payment in conservative investments (2-5 years)')
+    
+    if 'education-expenses' in upcoming_expenses:
+        ai_insights.append('🎓 Consider 529 education savings plan for tax advantages')
+    
+    if management_style.lower() == 'hands-off':
+        ai_insights.append('🤖 Consider target-date funds or robo-advisors for automated management')
+    
+    # Calculate expected returns based on allocation
+    expected_return = (final_allocation['stocks'] * 0.10 + final_allocation['bonds'] * 0.04 + final_allocation['cash'] * 0.02) / 100
+    
+    return {
+        'success': True,
+        'strategy': goal_strategies.get(goals.lower(), 'Comprehensive diversified investment approach'),
+        'allocation': [
+            {'type': 'Stocks/Equities', 'percentage': final_allocation['stocks'], 'amount': f'${stock_amount:,.0f}'},
+            {'type': 'Bonds/Fixed Income', 'percentage': final_allocation['bonds'], 'amount': f'${bond_amount:,.0f}'},
+            {'type': 'Cash/Emergency Fund', 'percentage': final_allocation['cash'], 'amount': f'${cash_amount:,.0f}'}
+        ],
+        'specific_recommendations': {
+            'stocks': stock_recommendations,
+            'bonds': bond_recommendations,
+            'alternatives': alternative_recommendations,
+            'cash': ['High-yield savings account (4-5% APY)', 'Money market fund', 'Treasury bills']
+        },
+        'tax_strategy': tax_strategy,
+        'ai_insights': ai_insights,
+        'next_steps': [
+            f'Open {"tax-advantaged" if "retirement" in goals.lower() else "taxable brokerage"} account',
+            'Start with broad market index funds (VTI, BND)',
+            'Invest gradually over 3-6 months (dollar-cost averaging)',
+            'Review and rebalance quarterly',
+            'Consider professional advice for complex situations'
+        ],
+        'risk_assessment': f'Your {risk_tolerance.lower()} risk profile with {timeline_key}-term timeline and {exp_key} experience level suggests this personalized approach. Expected volatility: {"Low" if final_allocation["stocks"] < 40 else "High" if final_allocation["stocks"] > 70 else "Moderate"}.',
+        'estimated_annual_return': f'{expected_return:.1f}%',
+        'personalization_factors': {
+            'experience_level': exp_key.title(),
+            'income_bracket': income_key.title(),
+            'tax_considerations': 'High' if tax_bracket.lower() in ['high', '32%', '35%', '37%'] else 'Standard',
+            'special_circumstances': len(special_circumstances),
+            'risk_adjustments': f'Modified from base {risk_tolerance} profile'
+        },
+        'compliance_note': 'This is educational information based on your provided profile, not personalized financial advice. Consult a qualified financial advisor for personalized recommendations.'
+    }
 
 # Modern Dashboard Template
 MODERN_DASHBOARD_TEMPLATE = """
@@ -1310,6 +1811,45 @@ MODERN_DASHBOARD_TEMPLATE = """
             align-self: stretch;
         }
         
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem;
+            background: var(--dark-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .checkbox-item:hover {
+            background: var(--card-bg);
+            border-color: var(--primary-color);
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: var(--primary-color);
+        }
+        
+        .checkbox-item label {
+            margin: 0;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-weight: 500;
+            flex: 1;
+        }
+        
         .footer {
             text-align: center;
             padding: 3rem 2rem;
@@ -1706,7 +2246,161 @@ MODERN_DASHBOARD_TEMPLATE = """
                     </div>
                     
                     <div class="wizard-step" id="step-2" style="display: none;">
-                        <h5>Step 2: Risk Profile & Goals</h5>
+                        <h5>Step 2: Financial Situation</h5>
+                        <div class="input-group">
+                            <label>Annual Income Range:</label>
+                            <select id="annual-income" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="under-50k">Under $50,000</option>
+                                <option value="50k-100k">$50,000 - $100,000</option>
+                                <option value="100k-200k">$100,000 - $200,000</option>
+                                <option value="200k-500k">$200,000 - $500,000</option>
+                                <option value="over-500k">Over $500,000</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Current Debt Level:</label>
+                            <select id="debt-level" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="none">No significant debt</option>
+                                <option value="low">Low debt (< 20% of income)</option>
+                                <option value="moderate">Moderate debt (20-40% of income)</option>
+                                <option value="high">High debt (> 40% of income)</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Emergency Fund Status:</label>
+                            <select id="emergency-fund" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="none">No emergency fund</option>
+                                <option value="partial">1-3 months expenses</option>
+                                <option value="adequate">3-6 months expenses</option>
+                                <option value="strong">6+ months expenses</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Monthly Liquidity Needs:</label>
+                            <select id="liquidity-needs" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="low">Low (< $500/month)</option>
+                                <option value="moderate">Moderate ($500-2000/month)</option>
+                                <option value="high">High (> $2000/month)</option>
+                            </select>
+                        </div>
+                        <div class="btn-group">
+                            <button class="action-button" onclick="wizardStep1()" style="background: var(--text-secondary);">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="action-button" onclick="wizardStep3()">
+                                <i class="fas fa-arrow-right"></i>
+                                Next: Experience
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-step" id="step-3" style="display: none;">
+                        <h5>Step 3: Investment Experience & Preferences</h5>
+                        <div class="input-group">
+                            <label>Investment Experience:</label>
+                            <select id="investment-experience" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="beginner">Beginner (No prior experience)</option>
+                                <option value="some">Some experience (Stocks, basic funds)</option>
+                                <option value="intermediate">Intermediate (Diversified portfolio)</option>
+                                <option value="advanced">Advanced (Complex strategies)</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Asset Classes You've Invested In (check all that apply):</label>
+                            <h4>Asset Classes You've Invested In:</h4>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="stocks" name="asset_classes" value="stocks">
+                            <label for="stocks">Stocks/Equities</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="bonds" name="asset_classes" value="bonds">
+                            <label for="bonds">Bonds</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="etfs" name="asset_classes" value="etfs">
+                            <label for="etfs">ETFs</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="mutual_funds" name="asset_classes" value="mutual_funds">
+                            <label for="mutual_funds">Mutual Funds</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="real_estate" name="asset_classes" value="real_estate">
+                            <label for="real_estate">Real Estate</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="commodities" name="asset_classes" value="commodities">
+                            <label for="commodities">Commodities</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="crypto" name="asset_classes" value="crypto">
+                            <label for="crypto">Cryptocurrency</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="none_invested" name="asset_classes" value="none">
+                            <label for="none_invested">None - I'm new to investing</label>
+                        </div>
+                    </div>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Investment Preferences:</label>
+                            <select id="investment-preferences" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="none">No specific preferences</option>
+                                <option value="esg">ESG/Sustainable investing</option>
+                                <option value="tech">Technology focus</option>
+                                <option value="dividend">Dividend-focused</option>
+                                <option value="growth">Growth stocks</option>
+                                <option value="value">Value investing</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Assets to Avoid (check all that apply):</label>
+                            <h4>Assets to Avoid:</h4>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="avoid_tobacco" name="assets_avoid" value="tobacco">
+                            <label for="avoid_tobacco">Tobacco</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="avoid_alcohol" name="assets_avoid" value="alcohol">
+                            <label for="avoid_alcohol">Alcohol</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="avoid_gambling" name="assets_avoid" value="gambling">
+                            <label for="avoid_gambling">Gambling</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="avoid_weapons" name="assets_avoid" value="weapons">
+                            <label for="avoid_weapons">Weapons/Defense</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="avoid_fossil" name="assets_avoid" value="fossil_fuels">
+                            <label for="avoid_fossil">Fossil Fuels</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="avoid_none" name="assets_avoid" value="none">
+                            <label for="avoid_none">No restrictions</label>
+                        </div>
+                    </div>
+                            </div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="action-button" onclick="wizardStep2()" style="background: var(--text-secondary);">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="action-button" onclick="wizardStep4()">
+                                <i class="fas fa-arrow-right"></i>
+                                Next: Goals & Risk
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-step" id="step-4" style="display: none;">
+                        <h5>Step 4: Goals, Risk & Timeline</h5>
                         <div class="input-group">
                             <label>Investment Timeline:</label>
                             <select id="investment-timeline" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
@@ -1733,8 +2427,206 @@ MODERN_DASHBOARD_TEMPLATE = """
                                 <option value="income">Passive Income</option>
                             </select>
                         </div>
+                        <div class="input-group">
+                            <label>Return Expectations:</label>
+                            <select id="return-expectations" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="preservation">Capital preservation (2-4%)</option>
+                                <option value="conservative">Conservative growth (4-6%)</option>
+                                <option value="moderate">Moderate growth (6-8%)</option>
+                                <option value="aggressive">Aggressive growth (8-12%)</option>
+                                <option value="speculative">Speculative returns (12%+)</option>
+                            </select>
+                        </div>
                         <div class="btn-group">
-                            <button class="action-button" onclick="wizardStep1()" style="background: var(--text-secondary);">
+                            <button class="action-button" onclick="wizardStep3()" style="background: var(--text-secondary);">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="action-button" onclick="wizardStep5()">
+                                <i class="fas fa-arrow-right"></i>
+                                Next: Tax & Planning
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-step" id="step-5" style="display: none;">
+                        <h5>Step 5: Tax Strategy & Financial Planning</h5>
+                        <div class="input-group">
+                            <label>Tax-Advantaged Accounts (check all that apply):</label>
+                            <h4>Tax-Advantaged Accounts:</h4>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="account_401k" name="tax_accounts" value="401k">
+                            <label for="account_401k">401(k)</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="account_ira" name="tax_accounts" value="ira">
+                            <label for="account_ira">Traditional IRA</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="account_roth" name="tax_accounts" value="roth_ira">
+                            <label for="account_roth">Roth IRA</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="account_hsa" name="tax_accounts" value="hsa">
+                            <label for="account_hsa">HSA</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="account_529" name="tax_accounts" value="529">
+                            <label for="account_529">529 Education Plan</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="account_none" name="tax_accounts" value="none">
+                            <label for="account_none">None currently</label>
+                        </div>
+                    </div>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Tax Bracket:</label>
+                            <select id="tax-bracket" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="low">10-12% (Low)</option>
+                                <option value="medium">22-24% (Medium)</option>
+                                <option value="high">32-35% (High)</option>
+                                <option value="highest">37% (Highest)</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Expected Income Changes:</label>
+                            <select id="income-changes" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="stable">Stable income expected</option>
+                                <option value="increase">Expecting income increase</option>
+                                <option value="decrease">Expecting income decrease</option>
+                                <option value="retirement">Approaching retirement</option>
+                                <option value="career-change">Career change planned</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Major Upcoming Expenses (check all that apply):</label>
+                            <h4>Major Upcoming Expenses:</h4>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expense_house" name="major_expenses" value="house">
+                            <label for="expense_house">House Purchase</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expense_car" name="major_expenses" value="car">
+                            <label for="expense_car">Car Purchase</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expense_education" name="major_expenses" value="education">
+                            <label for="expense_education">Education/Tuition</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expense_wedding" name="major_expenses" value="wedding">
+                            <label for="expense_wedding">Wedding</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expense_vacation" name="major_expenses" value="vacation">
+                            <label for="expense_vacation">Major Vacation</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expense_none" name="major_expenses" value="none">
+                            <label for="expense_none">No major expenses planned</label>
+                        </div>
+                    </div>
+                            </div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="action-button" onclick="wizardStep4()" style="background: var(--text-secondary);">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="action-button" onclick="wizardStep6()">
+                                <i class="fas fa-arrow-right"></i>
+                                Next: Personal Circumstances
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-step" id="step-6" style="display: none;">
+                        <h5>Step 6: Personal Circumstances & Management</h5>
+                        <div class="input-group">
+                            <label>Estate Planning Considerations:</label>
+                            <select id="estate-planning" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="none">No specific estate planning</option>
+                                <option value="basic">Basic will and beneficiaries</option>
+                                <option value="trust">Trust planning</option>
+                                <option value="charitable">Charitable giving goals</option>
+                                <option value="legacy">Intergenerational wealth transfer</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Insurance Coverage (check all that apply):</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="insurance_health" name="insurance" value="health">
+                            <label for="insurance_health">Health Insurance</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="insurance_life" name="insurance" value="life">
+                            <label for="insurance_life">Life Insurance</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="insurance_disability" name="insurance" value="disability">
+                            <label for="insurance_disability">Disability Insurance</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="insurance_auto" name="insurance" value="auto">
+                            <label for="insurance_auto">Auto Insurance</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="insurance_home" name="insurance" value="home">
+                            <label for="insurance_home">Home/Renters Insurance</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="insurance_umbrella" name="insurance" value="umbrella">
+                            <label for="insurance_umbrella">Umbrella Policy</label>
+                        </div>
+                    </div>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Investment Management Style:</label>
+                            <select id="management-style" style="width: 100%; padding: 1rem; background: var(--dark-bg); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary);">
+                                <option value="hands-off">Fully automated/delegated</option>
+                                <option value="periodic">Periodic review and adjustments</option>
+                                <option value="active">Active monitoring and decisions</option>
+                                <option value="hands-on">Fully hands-on management</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Special Circumstances (check all that apply):</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="circumstance_student" name="special_circumstances" value="student_loans">
+                            <label for="circumstance_student">Student Loan Debt</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="circumstance_credit" name="special_circumstances" value="credit_card_debt">
+                            <label for="circumstance_credit">Credit Card Debt</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="circumstance_dependents" name="special_circumstances" value="dependents">
+                            <label for="circumstance_dependents">Supporting Dependents</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="circumstance_inheritance" name="special_circumstances" value="inheritance">
+                            <label for="circumstance_inheritance">Expected Inheritance</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="circumstance_business" name="special_circumstances" value="business_owner">
+                            <label for="circumstance_business">Business Owner</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="circumstance_none" name="special_circumstances" value="none">
+                            <label for="circumstance_none">None apply</label>
+                        </div>
+                    </div>
+                            </div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="action-button" onclick="wizardStep5()" style="background: var(--text-secondary);">
                                 <i class="fas fa-arrow-left"></i>
                                 Back
                             </button>
@@ -1906,7 +2798,7 @@ MODERN_DASHBOARD_TEMPLATE = """
                     </div>
                     
                     <div style="background: var(--dark-bg); padding: 1.5rem; border-radius: 10px; margin: 2rem 0;">
-                        <h5>Generate Sample Reports (Free Preview)</h5>
+                        <h5>Generate Reports (Free Preview)</h5>
                         <div class="btn-group">
                             <button class="action-button" onclick="generateReport('portfolio')">
                                 <i class="fas fa-briefcase"></i>
@@ -2210,7 +3102,7 @@ MODERN_DASHBOARD_TEMPLATE = """
             const portfolioSize = tickers.length;
             
             // Fetch real portfolio analysis data
-            return fetch('/api/portfolio/analyze', {
+            return fetch('/api/comprehensive-analysis', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ tickers: tickers })
@@ -2414,7 +3306,7 @@ MODERN_DASHBOARD_TEMPLATE = """
             const etfTickers = ['VTI', 'VXUS', 'BND', 'VEA'];
             
             try {
-                const response = await fetch('/api/etf/analyze', {
+                const response = await fetch('/api/etf-analysis', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ etf_tickers: etfTickers })
@@ -2501,7 +3393,7 @@ MODERN_DASHBOARD_TEMPLATE = """
                 payload.tickers = tickers;
             }
             
-            fetch('/api/portfolio/analyze', {
+            fetch('/api/comprehensive-analysis', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
@@ -2786,6 +3678,38 @@ MODERN_DASHBOARD_TEMPLATE = """
         
         function displayCryptoResults(data) {
             const resultsDiv = document.getElementById('crypto-results');
+            
+            // Generate individual crypto recommendations HTML
+            let individualCryptoHTML = '';
+            if (data.crypto_data && Array.isArray(data.crypto_data)) {
+                individualCryptoHTML = `
+                    <div style="background: var(--dark-bg); padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
+                        <h5>Individual Cryptocurrency Analysis</h5>
+                        ${data.crypto_data.map(crypto => {
+                            const recommendationColor = 
+                                crypto.recommendation === 'BUY' ? 'var(--success-color)' :
+                                crypto.recommendation === 'SELL' ? 'var(--danger-color)' :
+                                'var(--warning-color)';
+                            
+                            return `
+                                <div style="background: var(--card-bg); padding: 1rem; border-radius: 8px; margin: 0.5rem 0; border-left: 4px solid ${recommendationColor};">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                        <strong>${crypto.symbol.toUpperCase()}</strong>
+                                        <span style="background: ${recommendationColor}; color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-weight: bold; font-size: 0.9rem;">
+                                            ${crypto.recommendation || 'HOLD'}
+                                        </span>
+                                    </div>
+                                    <p style="margin: 0.3rem 0; color: var(--text-secondary);">Price: $${(crypto.current_price || 0).toFixed(4)}</p>
+                                    <p style="margin: 0.3rem 0; color: var(--text-secondary);">24h Change: <span style="color: ${(crypto.price_change_24h || 0) >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${(crypto.price_change_24h || 0) >= 0 ? '+' : ''}${((crypto.price_change_24h || 0) * 100).toFixed(2)}%</span></p>
+                                    ${crypto.confidence ? `<p style="margin: 0.3rem 0; color: var(--text-secondary);">Confidence: ${crypto.confidence}%</p>` : ''}
+                                    ${crypto.reasoning ? `<p style="margin: 0.5rem 0; font-style: italic; color: var(--text-primary);">${crypto.reasoning}</p>` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+            
             resultsDiv.innerHTML = `
                 <div style="background: var(--card-bg); padding: 2rem; border-radius: 15px; margin-top: 2rem;">
                     <h4>Crypto Portfolio Analysis</h4>
@@ -2795,8 +3719,9 @@ MODERN_DASHBOARD_TEMPLATE = """
                         <p><strong>24h Change:</strong> <span style="color: ${(data.total_change || 0) >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${(data.total_change || 0) >= 0 ? '+' : ''}${((data.total_change || 0) * 100).toFixed(2)}%</span></p>
                         <p><strong>Diversification Score:</strong> ${data.diversification_score || 'N/A'}/10</p>
                     </div>
+                    ${individualCryptoHTML}
                     <div style="background: var(--primary-color); color: white; padding: 1rem; border-radius: 10px; margin: 1rem 0;">
-                        <strong>Crypto Insight:</strong> ${data.recommendation || 'Cryptocurrency markets are highly volatile. Only invest what you can afford to lose.'}
+                        <strong>Portfolio Insight:</strong> ${data.recommendation || 'Cryptocurrency markets are highly volatile. Only invest what you can afford to lose.'}
                     </div>
                 </div>
             `;
@@ -2821,6 +3746,251 @@ MODERN_DASHBOARD_TEMPLATE = """
                     </div>
                 </div>
             `;
+        }
+        
+        // Investment Wizard Step Navigation Functions
+        function wizardStep1() {
+            // Show step 1, hide others
+            document.getElementById('step-1').style.display = 'block';
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-3').style.display = 'none';
+            document.getElementById('step-4').style.display = 'none';
+            document.getElementById('step-5').style.display = 'none';
+            document.getElementById('step-6').style.display = 'none';
+        }
+        
+        function wizardStep2() {
+            // Validate step 1 inputs
+            const amount = document.getElementById('investment-amount').value;
+            const description = document.getElementById('investment-description').value;
+            
+            if (!amount || parseFloat(amount) < 100) {
+                alert('Please enter a valid investment amount (minimum $100)');
+                return;
+            }
+            
+            if (!description.trim()) {
+                alert('Please describe your investment situation');
+                return;
+            }
+            
+            // Hide all steps, show step 2
+            document.getElementById('step-1').style.display = 'none';
+            document.getElementById('step-2').style.display = 'block';
+            document.getElementById('step-3').style.display = 'none';
+            document.getElementById('step-4').style.display = 'none';
+            document.getElementById('step-5').style.display = 'none';
+            document.getElementById('step-6').style.display = 'none';
+        }
+        
+        function wizardStep3() {
+            // Hide all steps, show step 3
+            document.getElementById('step-1').style.display = 'none';
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-3').style.display = 'block';
+            document.getElementById('step-4').style.display = 'none';
+            document.getElementById('step-5').style.display = 'none';
+            document.getElementById('step-6').style.display = 'none';
+        }
+        
+        function wizardStep4() {
+            // Hide all steps, show step 4
+            document.getElementById('step-1').style.display = 'none';
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-3').style.display = 'none';
+            document.getElementById('step-4').style.display = 'block';
+            document.getElementById('step-5').style.display = 'none';
+            document.getElementById('step-6').style.display = 'none';
+        }
+        
+        function wizardStep5() {
+            // Hide all steps, show step 5
+            document.getElementById('step-1').style.display = 'none';
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-3').style.display = 'none';
+            document.getElementById('step-4').style.display = 'none';
+            document.getElementById('step-5').style.display = 'block';
+            document.getElementById('step-6').style.display = 'none';
+        }
+        
+        function wizardStep6() {
+            // Hide all steps, show step 6
+            document.getElementById('step-1').style.display = 'none';
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-3').style.display = 'none';
+            document.getElementById('step-4').style.display = 'none';
+            document.getElementById('step-5').style.display = 'none';
+            document.getElementById('step-6').style.display = 'block';
+        }
+        
+        function generateInvestmentRecommendations() {
+            // Helper function to safely get element value
+            function getElementValue(id, defaultValue = '') {
+                const element = document.getElementById(id);
+                return element ? element.value : defaultValue;
+            }
+            
+            // Helper function to safely check if element is checked
+            function isElementChecked(id) {
+                const element = document.getElementById(id);
+                return element ? element.checked : false;
+            }
+            
+            // Get all form values from all steps with null checks
+            const amount = getElementValue('investment-amount');
+            const description = getElementValue('investment-description');
+            
+            // Step 2: Financial Situation
+            const annualIncome = getElementValue('annual-income');
+            const debtLevel = getElementValue('debt-level');
+            const emergencyFund = getElementValue('emergency-fund');
+            const liquidityNeeds = getElementValue('liquidity-needs');
+            
+            // Step 3: Experience & Preferences
+            const investmentExperience = getElementValue('investment-experience');
+            const investmentPreferences = getElementValue('investment-preferences');
+            
+            // Collect experience checkboxes
+            const experienceAssets = [];
+            ['exp-stocks', 'exp-bonds', 'exp-etfs', 'exp-crypto', 'exp-realestate', 'exp-commodities'].forEach(id => {
+                if (isElementChecked(id)) {
+                    const element = document.getElementById(id);
+                    if (element && element.value) {
+                        experienceAssets.push(element.value);
+                    }
+                }
+            });
+            
+            // Collect assets to avoid
+            const assetsToAvoid = [];
+            ['avoid-tobacco', 'avoid-weapons', 'avoid-fossil', 'avoid-gambling', 'avoid-crypto-avoid'].forEach(id => {
+                if (isElementChecked(id)) {
+                    const element = document.getElementById(id);
+                    if (element && element.value) {
+                        assetsToAvoid.push(element.value);
+                    }
+                }
+            });
+            
+            // Step 4: Goals, Risk & Timeline
+            const timeline = getElementValue('investment-timeline');
+            const riskTolerance = getElementValue('risk-tolerance');
+            const goal = getElementValue('investment-goal');
+            const returnExpectations = getElementValue('return-expectations');
+            
+            // Step 5: Tax Strategy & Financial Planning
+            const taxBracket = getElementValue('tax-bracket');
+            const incomeChanges = getElementValue('income-changes');
+            
+            // Collect tax-advantaged accounts
+            const taxAccounts = [];
+            ['tax-401k', 'tax-ira', 'tax-roth', 'tax-hsa', 'tax-529'].forEach(id => {
+                if (isElementChecked(id)) {
+                    const element = document.getElementById(id);
+                    if (element && element.value) {
+                        taxAccounts.push(element.value);
+                    }
+                }
+            });
+            
+            // Collect upcoming expenses
+            const upcomingExpenses = [];
+            ['expense-home', 'expense-education', 'expense-wedding', 'expense-family', 'expense-care'].forEach(id => {
+                if (isElementChecked(id)) {
+                    const element = document.getElementById(id);
+                    if (element && element.value) {
+                        upcomingExpenses.push(element.value);
+                    }
+                }
+            });
+            
+            // Step 6: Personal Circumstances & Management
+            const estatePlanning = getElementValue('estate-planning');
+            const managementStyle = getElementValue('management-style');
+            
+            // Collect insurance coverage
+            const insuranceCoverage = [];
+            ['insurance-life', 'insurance-disability', 'insurance-health', 'insurance-umbrella'].forEach(id => {
+                if (isElementChecked(id)) {
+                    const element = document.getElementById(id);
+                    if (element && element.value) {
+                        insuranceCoverage.push(element.value);
+                    }
+                }
+            });
+            
+            // Collect special circumstances
+            const specialCircumstances = [];
+            ['special-parents', 'special-dependents', 'special-business', 'special-inheritance', 'special-divorce'].forEach(id => {
+                if (isElementChecked(id)) {
+                    const element = document.getElementById(id);
+                    if (element && element.value) {
+                        specialCircumstances.push(element.value);
+                    }
+                }
+            });
+            
+            // Validate required inputs
+            if (!amount || !timeline || !riskTolerance) {
+                alert('Please fill in the required fields: Investment Amount, Timeline, and Risk Tolerance');
+                return;
+            }
+            
+            if (parseFloat(amount) < 100) {
+                alert('Minimum investment amount is $100');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('wizard-results');
+            if (!resultsDiv) {
+                alert('Results container not found. Please refresh the page and try again.');
+                return;
+            }
+            
+            resultsDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Analyzing your comprehensive financial profile and generating personalized recommendations...</div>';
+            
+            fetch('/api/investment/wizard', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    amount: parseFloat(amount),
+                    situation: description,
+                    timeline: timeline,
+                    risk_tolerance: riskTolerance,
+                    goals: goal,
+                    // New comprehensive data
+                    annual_income: annualIncome,
+                    debt_level: debtLevel,
+                    emergency_fund: emergencyFund,
+                    liquidity_needs: liquidityNeeds,
+                    investment_experience: investmentExperience,
+                    experience_assets: experienceAssets,
+                    investment_preferences: investmentPreferences,
+                    assets_to_avoid: assetsToAvoid,
+                    return_expectations: returnExpectations,
+                    tax_bracket: taxBracket,
+                    income_changes: incomeChanges,
+                    tax_accounts: taxAccounts,
+                    upcoming_expenses: upcomingExpenses,
+                    estate_planning: estatePlanning,
+                    management_style: managementStyle,
+                    insurance_coverage: insuranceCoverage,
+                    special_circumstances: specialCircumstances
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    resultsDiv.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                } else {
+                    displayWizardResults(data);
+                }
+            })
+            .catch(error => {
+                resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            });
         }
         
         // Investment Wizard Functions
@@ -2874,25 +4044,209 @@ MODERN_DASHBOARD_TEMPLATE = """
             const resultsDiv = document.getElementById('wizard-results');
             resultsDiv.innerHTML = `
                 <div style="background: var(--card-bg); padding: 2rem; border-radius: 15px; margin-top: 2rem;">
-                    <h4>Your Personalized Investment Plan</h4>
-                    <div style="background: var(--success-color); color: white; padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
-                        <h5>Recommended Strategy</h5>
-                        <p>${data.strategy || 'Based on your profile, we recommend a diversified approach.'}</p>
+                    <h4><i class="fas fa-chart-pie"></i> Your Comprehensive Investment Plan</h4>
+                    
+                    ${data.ai_insights ? `
+                    <div style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); color: white; padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
+                        <h5><i class="fas fa-brain"></i> AI-Powered Insights</h5>
+                        <p>${data.ai_insights}</p>
                     </div>
+                    ` : ''}
+                    
+                    <div style="background: var(--success-color); color: white; padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
+                        <h5><i class="fas fa-bullseye"></i> Recommended Strategy</h5>
+                        <p>${data.strategy || 'Based on your comprehensive profile, we recommend a personalized diversified approach.'}</p>
+                        <p><strong>Estimated Annual Return:</strong> ${data.estimated_annual_return || '7-9%'}</p>
+                        ${data.personalization_factors ? `<p><strong>Personalization Score:</strong> ${data.personalization_factors}</p>` : ''}
+                    </div>
+                    
                     <div style="background: var(--dark-bg); padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
-                        <h5>Asset Allocation</h5>
+                        <h5><i class="fas fa-chart-pie"></i> Asset Allocation</h5>
                         ${(data.allocation || []).map(asset => `
-                            <div style="display: flex; justify-content: space-between; margin: 0.5rem 0;">
-                                <span>${asset.type}</span>
-                                <span style="font-weight: bold;">${asset.percentage}%</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin: 0.75rem 0; padding: 0.5rem; background: var(--card-bg); border-radius: 8px;">
+                                <span style="font-weight: 500;">${asset.type}</span>
+                                <div style="text-align: right;">
+                                    <div style="font-weight: bold; color: var(--primary-color);">${asset.percentage}%</div>
+                                    <div style="font-size: 0.875rem; color: var(--text-secondary);">${asset.amount}</div>
+                                </div>
                             </div>
                         `).join('')}
                     </div>
-                    <div style="background: var(--primary-color); color: white; padding: 1rem; border-radius: 10px; margin: 1rem 0;">
-                        <strong>Next Steps:</strong> ${data.next_steps || 'Start with low-cost index funds and gradually build your portfolio.'}
+                    
+                    ${data.specific_recommendations ? `
+                    <div style="background: var(--dark-bg); padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
+                        <h5><i class="fas fa-list-ul"></i> Specific Investment Recommendations</h5>
+                        ${data.specific_recommendations.stocks && data.specific_recommendations.stocks.length > 0 ? `
+                            <div style="margin: 1rem 0;">
+                                <strong style="color: var(--success-color);">Stock ETFs:</strong>
+                                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                                    ${data.specific_recommendations.stocks.map(stock => `<li style="margin: 0.25rem 0;">${stock}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${data.specific_recommendations.bonds && data.specific_recommendations.bonds.length > 0 ? `
+                            <div style="margin: 1rem 0;">
+                                <strong style="color: var(--warning-color);">Bond ETFs:</strong>
+                                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                                    ${data.specific_recommendations.bonds.map(bond => `<li style="margin: 0.25rem 0;">${bond}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${data.specific_recommendations.alternatives && data.specific_recommendations.alternatives.length > 0 ? `
+                            <div style="margin: 1rem 0;">
+                                <strong style="color: var(--info-color);">Alternative Investments:</strong>
+                                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                                    ${data.specific_recommendations.alternatives.map(alt => `<li style="margin: 0.25rem 0;">${alt}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${data.specific_recommendations.cash && data.specific_recommendations.cash.length > 0 ? `
+                            <div style="margin: 1rem 0;">
+                                <strong style="color: var(--text-secondary);">Cash & Cash Equivalents:</strong>
+                                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                                    ${data.specific_recommendations.cash.map(cash => `<li style="margin: 0.25rem 0;">${cash}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ` : ''}
+                    
+                    ${data.tax_strategy ? `
+                    <div style="background: var(--info-color); color: white; padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
+                        <h5><i class="fas fa-calculator"></i> Tax Strategy Recommendations</h5>
+                        <p>${data.tax_strategy}</p>
+                    </div>
+                    ` : ''}
+                    
+                    ${data.risk_assessment ? `
+                    <div style="background: var(--warning-color); color: white; padding: 1rem; border-radius: 10px; margin: 1rem 0;">
+                        <strong><i class="fas fa-shield-alt"></i> Risk Assessment:</strong> ${data.risk_assessment}
+                    </div>
+                    ` : ''}
+                    
+                    ${data.timeline_considerations ? `
+                    <div style="background: var(--secondary-color); color: white; padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
+                        <h5><i class="fas fa-clock"></i> Timeline Considerations</h5>
+                        <p>${data.timeline_considerations}</p>
+                    </div>
+                    ` : ''}
+                    
+                    ${data.rebalancing_strategy ? `
+                    <div style="background: var(--dark-bg); padding: 1.5rem; border-radius: 10px; margin: 1rem 0; border-left: 4px solid var(--primary-color);">
+                        <h5><i class="fas fa-sync-alt"></i> Rebalancing Strategy</h5>
+                        <p>${data.rebalancing_strategy}</p>
+                    </div>
+                    ` : ''}
+                    
+                    <div style="background: var(--primary-color); color: white; padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
+                        <h5><i class="fas fa-rocket"></i> Next Steps</h5>
+                        <p>${data.next_steps || 'Start with low-cost index funds and gradually build your diversified portfolio based on your comprehensive financial profile.'}</p>
+                    </div>
+                    
+                    ${data.monitoring_recommendations ? `
+                    <div style="background: var(--dark-bg); padding: 1.5rem; border-radius: 10px; margin: 1rem 0; border-left: 4px solid var(--success-color);">
+                        <h5><i class="fas fa-chart-line"></i> Portfolio Monitoring</h5>
+                        <p>${data.monitoring_recommendations}</p>
+                    </div>
+                    ` : ''}
+                    
+                    ${data.compliance_note ? `
+                    <div style="background: var(--text-secondary); color: white; padding: 1rem; border-radius: 10px; margin: 1rem 0; font-size: 0.875rem;">
+                        <strong><i class="fas fa-info-circle"></i> Important Disclaimer:</strong> ${data.compliance_note}
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        // Missing JavaScript Functions
+        function runUnifiedAnalysis() {
+            const tickers = document.getElementById('unified-tickers').value;
+            const shares = document.getElementById('unified-shares').value;
+            
+            if (!tickers) {
+                alert('Please enter stock tickers');
+                return;
+            }
+            
+            document.getElementById('unified-results').innerHTML = '<div class="loading">Running unified portfolio & stock analysis...</div>';
+            
+            const requestData = {
+                tickers: tickers.split(',').map(t => t.trim())
+            };
+            
+            if (shares) {
+                requestData.shares = shares.split(',').map(s => parseFloat(s.trim()) || 1);
+            }
+            
+            fetch('/api/comprehensive-analysis', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayUnifiedResults(data);
+            })
+            .catch(error => {
+                document.getElementById('unified-results').innerHTML = `<div style="color: var(--danger-color);">Error: ${error.message}</div>`;
+            });
+        }
+        
+        function runWhitepaperAnalysis() {
+            // Placeholder function for whitepaper analysis
+            const resultsDiv = document.getElementById('whitepaper-results') || document.getElementById('ai-results');
+            if (resultsDiv) {
+                resultsDiv.innerHTML = '<div class="loading">Analyzing whitepapers and research documents...</div>';
+                
+                // Simulate analysis
+                setTimeout(() => {
+                    resultsDiv.innerHTML = `
+                        <div style="background: var(--card-bg); padding: 2rem; border-radius: 15px; margin-top: 2rem;">
+                            <h4>Whitepaper Analysis Results</h4>
+                            <p>This feature is currently under development. Advanced AI-powered whitepaper analysis will be available soon.</p>
+                            <div style="background: var(--primary-color); color: white; padding: 1rem; border-radius: 10px; margin: 1rem 0;">
+                                <strong>Coming Soon:</strong> AI-powered analysis of investment whitepapers, research reports, and financial documents.
+                            </div>
+                        </div>
+                    `;
+                }, 1500);
+            }
+        }
+        
+        function displayUnifiedResults(data) {
+            // Display unified analysis results similar to other analysis functions
+            const analysis = translateFinancialData(data);
+            
+            document.getElementById('unified-results').innerHTML = `
+                <div style="background: var(--card-bg); padding: 2rem; border-radius: 15px; margin-top: 2rem;">
+                    <h4>Unified Portfolio & Stock Analysis Results</h4>
+                    ${analysis.recommendation}
+                    ${analysis.explanation}
+                    
+                    <div style="margin-top: 2rem; padding: 1rem; background: var(--dark-bg); border-radius: 10px;">
+                        <h5>Technical Analysis Details</h5>
+                        <button onclick="toggleTechnicalData('unified')" style="background: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer;">Show Technical Data</button>
+                        <div id="unified-technical" style="display: none; margin-top: 1rem;">
+                            <pre style="background: var(--dark-bg); padding: 1rem; border-radius: 10px; overflow-x: auto; color: var(--text-secondary);">${JSON.stringify(data, null, 2)}</pre>
+                        </div>
                     </div>
                 </div>
             `;
+        }
+
+        // Toggle Technical Data Display
+        function toggleTechnicalData(type) {
+            const technicalDiv = document.getElementById(type + '-technical');
+            const button = event.target;
+
+            if (technicalDiv.style.display === 'none') {
+                technicalDiv.style.display = 'block';
+                button.textContent = 'Hide Technical Data';
+            } else {
+                technicalDiv.style.display = 'none';
+                button.textContent = 'Show Technical Data';
+            }
         }
         
         // Load tickers when page loads

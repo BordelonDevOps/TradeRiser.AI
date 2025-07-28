@@ -422,21 +422,9 @@ class ETFAnalyzer(AnalysisBase):
         try:
             analysis = self.analyze_etf_universe()
             if 'error' in analysis:
-                self.logger.warning("ETF analysis failed, using fallback data")
-                return self._create_fallback_etf_data()
+                self.logger.error("ETF analysis failed - real data required")
+                return analysis
             return analysis
         except Exception as e:
             self.logger.error(f"Error getting ETF recommendations: {str(e)}")
-            return self._create_fallback_etf_data()
-    
-    def _create_fallback_etf_data(self) -> Dict:
-        """Return error when ETF analysis fails - no placeholder data"""
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'error': 'ETF analysis failed - no data available',
-            'message': 'Unable to fetch real ETF data. All APIs are unavailable.',
-            'etfs': [],
-            'market_summary': {},
-            'category_analysis': {},
-            'recommendations': []
-        }
+            return {'error': str(e), 'message': 'ETF analysis requires real data - no fallback available'}

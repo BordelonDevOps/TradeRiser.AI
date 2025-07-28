@@ -1,0 +1,118 @@
+# Environment variables and secrets
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Flask
+instance/
+.webassets-cache
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# API keys and credentials (additional protection)
+api_keys.txt
+credentials.json
+secrets.json
+config.ini
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# OS generated files
+.DS_Store?
+ehthumbs.db
+Icon?
+Thumbs.db
+
+# Node.js (if using any frontend tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Redis dump
+dump.rdb
+
+# SSL certificates
+*.crt
+*.csr
+*.key
+*.pem
+
+# Docker
+.dockerignore
+Dockerfile.local
+docker-compose.override.yml

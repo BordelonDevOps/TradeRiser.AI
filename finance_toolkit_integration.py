@@ -74,7 +74,14 @@ class FinanceToolkitAnalyzer:
             Dictionary containing comprehensive analysis results
         """
         if not self.toolkit:
-            return self._create_fallback_analysis(ticker)
+            return {
+                'ticker': ticker.upper(),
+                'analysis_date': datetime.now().isoformat(),
+                'data_source': 'Error',
+                'success': False,
+                'error': 'FinanceToolkit not available - no analysis possible',
+                'message': 'No analysis available. FinanceToolkit required for comprehensive analysis.'
+            }
         
         try:
             # Create toolkit instance for specific ticker
@@ -124,7 +131,14 @@ class FinanceToolkitAnalyzer:
             
         except Exception as e:
             self.logger.error(f"Error analyzing company {ticker}: {e}")
-            return self._create_fallback_analysis(ticker, error=str(e))
+            return {
+                'ticker': ticker.upper(),
+                'analysis_date': datetime.now().isoformat(),
+                'data_source': 'Error',
+                'success': False,
+                'error': str(e),
+                'message': 'Analysis failed. FinanceToolkit error occurred.'
+            }
     
     def _get_financial_ratios(self, toolkit, ticker: str) -> Dict[str, Any]:
         """
@@ -285,7 +299,14 @@ class FinanceToolkitAnalyzer:
             Portfolio analysis results
         """
         if not self.toolkit:
-            return self._create_fallback_portfolio_analysis(tickers)
+            return {
+                'tickers': [t.upper() for t in tickers],
+                'analysis_date': datetime.now().isoformat(),
+                'data_source': 'Error',
+                'success': False,
+                'error': 'FinanceToolkit not available - no portfolio analysis possible',
+                'message': 'No portfolio analysis available. FinanceToolkit required for comprehensive portfolio analysis.'
+            }
         
         try:
             # Clean and validate tickers
@@ -360,40 +381,23 @@ class FinanceToolkitAnalyzer:
             
         except Exception as e:
             self.logger.error(f"Error analyzing portfolio: {e}")
-            return self._create_fallback_portfolio_analysis(tickers, error=str(e))
+            return {
+                'tickers': [t.upper() for t in tickers],
+                'analysis_date': datetime.now().isoformat(),
+                'data_source': 'Error',
+                'success': False,
+                'error': str(e),
+                'message': 'Portfolio analysis failed. FinanceToolkit error occurred.'
+            }
     
-    def _create_fallback_analysis(self, ticker: str, error: str = None) -> Dict[str, Any]:
-        """
-        Create fallback analysis when FinanceToolkit is unavailable - no placeholder data
-        """
-        return {
-            'ticker': ticker.upper(),
-            'analysis_date': datetime.now().isoformat(),
-            'data_source': 'Error',
-            'success': False,
-            'error': error or 'FinanceToolkit not available - no analysis possible',
-            'message': 'No analysis available. FinanceToolkit required for comprehensive analysis.'
-        }
-    
-    def _create_fallback_portfolio_analysis(self, tickers: List[str], error: str = None) -> Dict[str, Any]:
-        """
-        Create fallback portfolio analysis - no placeholder data
-        """
-        return {
-            'tickers': [t.upper() for t in tickers],
-            'analysis_date': datetime.now().isoformat(),
-            'data_source': 'Error',
-            'success': False,
-            'error': error or 'FinanceToolkit not available - no portfolio analysis possible',
-            'message': 'No portfolio analysis available. FinanceToolkit required for comprehensive portfolio analysis.'
-        }
+
     
     def get_available_metrics(self) -> List[str]:
         """
         Get list of available financial metrics
         """
         if not self.toolkit:
-            return ['Fallback metrics only']
+            return ['FinanceToolkit not available - no metrics available']
         
         return [
             'Liquidity Ratios', 'Profitability Ratios', 'Leverage Ratios',

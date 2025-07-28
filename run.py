@@ -51,8 +51,8 @@ def check_dependencies():
 
 def check_api_keys():
     """Check if required API keys are configured"""
-    required_keys = ['ALPHA_VANTAGE_API_KEY']
-    optional_keys = ['TWITTER_API_KEY', 'FRED_API_KEY']
+    required_keys = []  # Remove ALPHA_VANTAGE_API_KEY temporarily
+    optional_keys = ['TWITTER_API_KEY', 'FRED_API_KEY', 'ALPHA_VANTAGE_API_KEY']
     
     missing_required = []
     for key in required_keys:

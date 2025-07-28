@@ -440,9 +440,9 @@ class QuantStrategies:
 if __name__ == "__main__":
     quant = QuantStrategies()
     
-    # Test with a sample ticker
+    # Test with AAPL ticker
     result = quant.analyze_ticker("AAPL", "6mo")
-    print("Sample Analysis for AAPL:")
+    print("Analysis for AAPL:")
     print(f"Overall Recommendation: {result.get('overall_recommendation', {})}")
     
     for strategy, data in result.get('strategies', {}).items():

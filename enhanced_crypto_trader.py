@@ -137,10 +137,10 @@ class EnhancedCryptoTrader:
                 recommendations.append(analysis)
                 self.logger.info(f"Processed {info['symbol']}: {analysis['recommendation']}")
         
-        # If no valid analysis results, provide fallback data
+        # If no valid analysis results, return empty list
         if not recommendations:
-            self.logger.warning("No crypto analysis results available, using fallback data")
-            recommendations = self._create_fallback_crypto_data()
+            self.logger.error("No crypto analysis results available - API data required")
+            return []
             
         return sorted(recommendations, key=lambda x: x['overall_score'], reverse=True)[:max_recommendations]
 
@@ -234,8 +234,3 @@ class EnhancedCryptoTrader:
         if aml_compliance['risk_level'] == 'HIGH':
             return "AVOID - High AML Risk"
         return "BUY" if score >= 60 else "HOLD"
-    
-    def _create_fallback_crypto_data(self) -> List[Dict]:
-        """Return empty list when crypto analysis fails - no placeholder data"""
-        self.logger.error("Crypto analysis failed - no data available")
-        return []

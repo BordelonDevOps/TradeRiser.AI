@@ -239,16 +239,7 @@ class AnalysisBase:
             return False
         return len(ticker.strip()) > 0 and ticker.isalnum()
     
-    def _create_fallback_data(self, ticker: str, error_message: str) -> Dict:
-        """
-        Create fallback data structure when analysis fails
-        """
-        return {
-            'ticker': ticker,
-            'error': error_message,
-            'timestamp': datetime.now().isoformat(),
-            'data_available': False
-        }
+
     
     def _generate_recommendation(self, score: float, thresholds: Dict = None) -> str:
         """

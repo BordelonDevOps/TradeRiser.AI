@@ -286,22 +286,9 @@ class CommoditiesTrader(AnalysisBase):
         try:
             analysis = self.analyze_commodity_market()
             if 'error' in analysis:
-                self.logger.warning("Commodity analysis failed, using fallback data")
-                return self._create_fallback_commodity_data()
+                self.logger.error("Commodity analysis failed - real data required")
+                return analysis
             return analysis
         except Exception as e:
             self.logger.error(f"Error getting commodity recommendations: {str(e)}")
-            return self._create_fallback_commodity_data()
-    
-    def _create_fallback_commodity_data(self) -> Dict:
-        """Return error when commodity analysis fails - no placeholder data"""
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'error': 'Commodity analysis failed - no data available',
-            'message': 'Unable to fetch real commodity data. All APIs are unavailable.',
-            'commodities': [],
-            'market_summary': {},
-            'sector_performance': {},
-            'top_performers': [],
-            'recommendations': []
-        }
+            return {'error': str(e), 'message': 'Commodity analysis requires real data - no fallback available'}
