@@ -1,0 +1,33 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Installing Python dependencies"
+        - pip install --upgrade pip
+        - pip install -r requirements.txt
+    build:
+      commands:
+        - echo "Building TradeRiser application"
+        - echo "No build step required for Flask app"
+    postBuild:
+      commands:
+        - echo "Post-build completed"
+  artifacts:
+    baseDirectory: /
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - ~/.cache/pip/**/*
+backend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Backend pre-build phase"
+    build:
+      commands:
+        - echo "Backend build phase"
+    postBuild:
+      commands:
+        - echo "Backend post-build phase"
