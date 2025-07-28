@@ -83,31 +83,26 @@
         let attempts = 0;
         const maxAttempts = 30;
         
-        function checkBackend() {
-            attempts++;
-            
-            // Try to fetch from the Flask app
-            fetch('/api/tickers')
-                .then(response => {
-                    if (response.ok) {
-                        // Backend is running, redirect to the main app
-                        window.location.href = '/dashboard';
-                    } else {
-                        throw new Error('Backend not ready');
-                    }
-                })
-                .catch(error => {
-                    if (attempts < maxAttempts) {
-                        // Try again in 2 seconds
-                        setTimeout(checkBackend, 2000);
-                    } else {
-                        // Show error after max attempts
-                        document.querySelector('.loading').style.display = 'none';
-                        document.querySelector('.spinner').style.display = 'none';
-                        document.querySelector('.redirect-info').style.display = 'none';
-                        document.getElementById('error').style.display = 'block';
-                    }
-                });
+        async function checkBackend() {
+            try {
+                // Try to connect to Flask backend on port 8000
+                const backendUrl = window.location.protocol + '//' + window.location.hostname + ':8000';
+                const response = await fetch(backendUrl + '/api/tickers?_t=' + Date.now());
+                if (response.ok) {
+                    // Redirect to Flask backend dashboard
+                    window.location.href = backendUrl + '/dashboard';
+                } else {
+                    throw new Error('Backend not ready');
+                }
+            } catch (error) {
+                attempts++;
+                if (attempts < maxAttempts) {
+                    setTimeout(checkBackend, 2000);
+                } else {
+                    document.querySelector('.loading').textContent = 'Backend initialization failed. Please refresh the page or try: ' + window.location.protocol + '//' + window.location.hostname + ':8000';
+                    document.querySelector('.spinner').style.display = 'none';
+                }
+            }
         }
         
         // Start checking after 3 seconds
