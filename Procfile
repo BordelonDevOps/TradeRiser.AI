@@ -1,1 +1,1 @@
-web: python start_server.py
+web: gunicorn --bind 0.0.0.0:$PORT application:application
