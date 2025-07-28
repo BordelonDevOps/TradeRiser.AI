@@ -1,0 +1,26 @@
+{
+  "name": "traderiser-ai",
+  "version": "1.0.0",
+  "description": "TradeRiser AI Trading Platform",
+  "main": "application.py",
+  "scripts": {
+    "start": "waitress-serve --host=0.0.0.0 --port=8000 application:application",
+    "build": "echo 'No build step required for Flask backend'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BordelonDevOps/TradeRiser.AI.git"
+  },
+  "keywords": [
+    "trading",
+    "finance",
+    "ai",
+    "flask",
+    "python"
+  ],
+  "author": "TradeRiser Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

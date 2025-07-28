@@ -1,20 +1,23 @@
 version: 1
-build:
+frontend:
   phases:
     preBuild:
       commands:
-        - echo "Installing Python dependencies"
-        - pip install --upgrade pip
-        - pip install -r requirements.txt
+        - echo "Installing Python dependencies for Flask backend"
+        - python3 -m pip install --upgrade pip
+        - python3 -m pip install -r requirements.txt
+        - echo "Python dependencies installed"
     build:
       commands:
-        - echo "Building TradeRiser application"
-        - echo "No build step required for Flask app"
+        - echo "Building TradeRiser Flask application"
+        - python3 -c "import application; print('Flask app imported successfully')"
+        - echo "Flask application ready for deployment"
     postBuild:
       commands:
-        - echo "Post-build completed"
+        - echo "Starting Flask application with Waitress"
+        - echo "Application will be served on port 8000"
   artifacts:
-    baseDirectory: /
+    baseDirectory: .
     files:
       - '**/*'
   cache:
