@@ -3,6 +3,7 @@ Flask==2.3.3
 Flask-Cors==4.0.0
 Werkzeug==2.3.7
 gunicorn==22.0.0
+waitress>=2.1.2
 python-dotenv==1.0.0
 
 # Core Data Science Libraries (Essential)
@@ -36,8 +37,11 @@ openpyxl>=3.1.2
 
 # Trading Integration
 alpaca-py>=0.39.4
+alpaca-trade-api>=3.0.0
 mcp>=1.6.0
 fastmcp>=0.1.0
+finnhub-python>=2.4.0
+ortools>=9.10.4067
 
 # Optional Dependencies (Install as needed)
 # alpha-vantage>=2.3.1  # Alternative API
@@ -48,7 +52,6 @@ fastmcp>=0.1.0
 # lxml>=4.9.3  # XML parsing
 # textblob>=0.18.0  # Sentiment analysis
 # pytrends>=4.9.2  # Google Trends
-# ortools>=9.10.4067  # Optimization
 # xlsxwriter>=3.1.9  # Alternative Excel writer
 # fmp-python>=0.1.4  # Financial Modeling Prep
 # yahooquery>=2.3.0  # Alternative Yahoo Finance

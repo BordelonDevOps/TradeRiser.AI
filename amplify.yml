@@ -1,5 +1,5 @@
 version: 1
-frontend:
+build:
   phases:
     preBuild:
       commands:
@@ -20,14 +20,3 @@ frontend:
   cache:
     paths:
       - ~/.cache/pip/**/*
-backend:
-  phases:
-    preBuild:
-      commands:
-        - echo "Backend pre-build phase"
-    build:
-      commands:
-        - echo "Backend build phase"
-    postBuild:
-      commands:
-        - echo "Backend post-build phase"
