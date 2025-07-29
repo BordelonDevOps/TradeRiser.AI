@@ -1,0 +1,40 @@
+# SAM configuration file for TradeRiser AI
+
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "traderiser-ai"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = []
+image_repositories = []
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+fail_on_empty_changeset = false
+stack_name = "traderiser-ai"
+s3_prefix = "traderiser-ai"
+region = "us-east-1"
+parameter_overrides = []
+image_repositories = []
+
+[default.package.parameters]
+s3_prefix = "traderiser-ai"
+region = "us-east-1"
+output_template_file = "packaged-template.yaml"
+
+[default.sync.parameters]
+watch = true
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"
