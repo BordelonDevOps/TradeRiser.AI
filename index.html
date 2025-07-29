@@ -85,8 +85,8 @@
         
         async function checkBackend() {
             try {
-                // Try to connect to Flask backend on port 8000
-                const backendUrl = window.location.protocol + '//' + window.location.hostname + ':8000';
+                // Try to connect to Flask backend (AWS Amplify handles port automatically)
+                const backendUrl = window.location.protocol + '//' + window.location.hostname;
                 const response = await fetch(backendUrl + '/api/tickers?_t=' + Date.now());
                 if (response.ok) {
                     // Redirect to Flask backend dashboard
@@ -99,7 +99,7 @@
                 if (attempts < maxAttempts) {
                     setTimeout(checkBackend, 2000);
                 } else {
-                    document.querySelector('.loading').textContent = 'Backend initialization failed. Please refresh the page or try: ' + window.location.protocol + '//' + window.location.hostname + ':8000';
+                    document.querySelector('.loading').textContent = 'Backend initialization failed. Please refresh the page.';
                     document.querySelector('.spinner').style.display = 'none';
                 }
             }
