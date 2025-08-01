@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  TradeRiser AI Platform
+  
+  Serverless Flask application for financial trading analysis
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.11
+    Environment:
+      Variables:
+        FLASK_ENV: production
+        PYTHONPATH: /var/task
+
+Resources:
+  TradeRiserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: lambda_handler.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 1024
+      Environment:
+        Variables:
+          FLASK_ENV: production
+          PYTHONPATH: /var/task
+      Events:
+        CatchAll:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            RestApiId: !Ref TradeRiserApi
+        Root:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+            RestApiId: !Ref TradeRiserApi
+
+  TradeRiserApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: TradeRiser AI API
+          version: '1.0'
+        paths:
+          '/':
+            x-amazon-apigateway-any-method:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TradeRiserFunction.Arn}/invocations'
+          '/{proxy+}':
+            x-amazon-apigateway-any-method:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TradeRiserFunction.Arn}/invocations'
+
+Outputs:
+  TradeRiserApiUrl:
+    Description: "API Gateway endpoint URL for TradeRiser function"
+    Value: !Sub "https://${TradeRiserApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  TradeRiserFunction:
+    Description: "TradeRiser Lambda Function ARN"
+    Value: !GetAtt TradeRiserFunction.Arn
+  TradeRiserFunctionIamRole:
+    Description: "Implicit IAM Role created for TradeRiser function"
+    Value: !GetAtt TradeRiserFunctionRole.Arn

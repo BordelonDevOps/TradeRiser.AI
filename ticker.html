@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TradeRiser Ticker</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #000;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
+
+    .header-container {
+      display: flex;
+      align-items: center;
+      background-color: #000;
+      height: 50px;
+      border-bottom: 2px solid #333;
+    }
+
+    .header-title {
+      padding: 0 20px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #0ff;
+      flex-shrink: 0;
+    }
+
+    .ticker-container {
+      overflow: hidden;
+      white-space: nowrap;
+      background-color: #000;
+      flex-grow: 1;
+      height: 50px;
+      display: flex;
+      align-items: center;
+    }
+
+    .ticker-content {
+      display: inline-block;
+      padding-left: 100%;
+      animation: scrollTicker 60s linear infinite;
+    }
+
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 20px;
+    }
+
+    .ticker-icon {
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      border-radius: 3px;
+    }
+
+    .index-label {
+      font-weight: bold;
+      font-size: 16px;
+      margin-right: 8px;
+      color: #ccc;
+    }
+
+    .ticker-symbol {
+      font-weight: bold;
+      color: #0ff;
+    }
+
+    .ticker-price {
+      margin-left: 6px;
+      font-weight: normal;
+    }
+
+    .ticker-up {
+      color: #0f0;
+    }
+
+    .ticker-down {
+      color: #f33;
+    }
+
+    @keyframes scrollTicker {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header-container">
+  <div class="header-title">TradeRiser.ai</div>
+  <div class="ticker-container">
+    <div class="ticker-content" id="ticker">
+      <!-- Populated by JavaScript -->
+    </div>
+  </div>
+</div>
+
+<script>
+  const apiKey = '5OX0XMT9EK5SGNN9'; // AlphaVantage Premium Key
+
+  const tickers = [
+    // Stocks/ETFs
+    'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'NVDA', 'META', 'NFLX',
+    'SLB', 'HAL', 'BKR', 'COP', 'CVX', 'XOM', 'EOG', 'PSX', 'VLO',
+    'CPER', 'GLD', 'SLV',
+
+    // Crypto (special icons)
+    'BTCUSD', 'ETHUSD', 'DOGEUSD', 'LTCUSD', 'SOLUSD',
+
+    // Indexes (letter-badge style only)
+    '^DJI', '^IXIC', '^GSPC'
+  ];
+
+  const cryptoLogos = {
+    BTCUSD: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png',
+    ETHUSD: 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+    DOGEUSD: 'https://cryptologos.cc/logos/dogecoin-doge-logo.png',
+    LTCUSD: 'https://cryptologos.cc/logos/litecoin-ltc-logo.png',
+    SOLUSD: 'https://cryptologos.cc/logos/solana-sol-logo.png',
+  };
+
+  const indexNames = {
+    '^DJI': 'DJIA',
+    '^IXIC': 'NASDAQ',
+    '^GSPC': 'S&P'
+  };
+
+  async function fetchPrice(symbol) {
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      const quote = data["Global Quote"];
+      if (!quote || !quote["05. price"]) return null;
+
+      const current = parseFloat(quote["05. price"]);
+      const previous = parseFloat(quote["08. previous close"]);
+      return { symbol, current, previous };
+    } catch (err) {
+      console.error(`Error fetching ${symbol}:`, err);
+      return null;
+    }
+  }
+
+  async function buildTicker() {
+    const tickerEl = document.getElementById('ticker');
+
+    for (const symbol of tickers) {
+      const priceData = await fetchPrice(symbol);
+      if (!priceData) continue;
+
+      const { current, previous } = priceData;
+      const change = current - previous;
+      const direction = change >= 0 ? 'ticker-up' : 'ticker-down';
+
+      const item = document.createElement('div');
+      item.className = 'ticker-item';
+
+      // Determine image or label
+      if (cryptoLogos[symbol]) {
+        item.innerHTML = `
+          <img class="ticker-icon" src="${cryptoLogos[symbol]}" alt="${symbol}" />
+          <span class="ticker-symbol">${symbol}</span>
+          <span class="ticker-price ${direction}">${current.toFixed(2)}</span>
+        `;
+      } else if (indexNames[symbol]) {
+        item.innerHTML = `
+          <span class="index-label">${indexNames[symbol]}</span>
+          <span class="ticker-price ${direction}">${current.toFixed(2)}</span>
+        `;
+      } else {
+        item.innerHTML = `
+          <img class="ticker-icon" src="https://financialmodelingprep.com/image-stock/${symbol}.png" alt="${symbol}" />
+          <span class="ticker-symbol">${symbol}</span>
+          <span class="ticker-price ${direction}">${current.toFixed(2)}</span>
+        `;
+      }
+
+      tickerEl.appendChild(item);
+    }
+  }
+
+  buildTicker();
+</script>
+
+</body>
+</html>

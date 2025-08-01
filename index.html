@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradeRiser AI - Loading...</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .logo {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .loading {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #FFD700;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 2rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #ff6b6b;
+            margin-top: 1rem;
+            display: none;
+        }
+        .redirect-info {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">TradeRiser.AI</div>
+        <div class="loading">Initializing Trading Platform...</div>
+        <div class="spinner"></div>
+        <div class="redirect-info">
+            <p>🚀 Starting Flask Backend Server</p>
+            <p>📊 Loading Financial Data APIs</p>
+            <p>⚡ Preparing Trading Interface</p>
+        </div>
+        <div class="error" id="error">
+            <p>❌ Unable to start the application</p>
+            <p>Please check the deployment logs in AWS Amplify Console</p>
+        </div>
+    </div>
+
+    <script>
+        // Try to detect if Flask backend is running
+        let attempts = 0;
+        const maxAttempts = 30;
+        
+        async function checkBackend() {
+            try {
+                // Try to connect to Flask backend (AWS Amplify handles port automatically)
+                const backendUrl = window.location.protocol + '//' + window.location.hostname;
+                const response = await fetch(backendUrl + '/api/tickers?_t=' + Date.now());
+                if (response.ok) {
+                    // Redirect to Flask backend dashboard
+                    window.location.href = backendUrl + '/dashboard';
+                } else {
+                    throw new Error('Backend not ready');
+                }
+            } catch (error) {
+                attempts++;
+                if (attempts < maxAttempts) {
+                    setTimeout(checkBackend, 2000);
+                } else {
+                    document.querySelector('.loading').textContent = 'Backend initialization failed. Please refresh the page.';
+                    document.querySelector('.spinner').style.display = 'none';
+                }
+            }
+        }
+        
+        // Start checking after 3 seconds
+        setTimeout(checkBackend, 3000);
+        
+        // Also provide a manual redirect option
+        setTimeout(() => {
+            if (attempts < maxAttempts) {
+                document.querySelector('.redirect-info').innerHTML += 
+                    '<p><a href="/dashboard" style="color: #FFD700; text-decoration: none;">🔗 Click here if not redirected automatically</a></p>';
+            }
+        }, 10000);
+    </script>
+</body>
+</html>
