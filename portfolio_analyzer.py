@@ -133,10 +133,10 @@ class PortfolioAnalyzer(AnalysisBase):
         return abs(total_weight - 1.0) <= 0.01
 
     def _fetch_stock_data(self, ticker: str) -> Dict:
-        """Fetch comprehensive stock data using Yahoo Finance"""
+        """Fetch comprehensive stock data using Alpha Vantage with Yahoo Finance fallback"""
         try:
-            # Try Yahoo Finance first (no API key required)
-            fundamental_data = self._fetch_yahoo_fundamentals(ticker)
+            # Try Alpha Vantage first for premium data quality
+            fundamental_data = self._fetch_alpha_vantage_fundamentals(ticker)
             technical_data = self._fetch_technical_data(ticker)
             alternative_data = self._fetch_alternative_data(ticker)
             
@@ -191,6 +191,31 @@ class PortfolioAnalyzer(AnalysisBase):
         except Exception as e:
             self.logger.error(f"Error fetching yfinance technical data for {ticker}: {str(e)}")
             return None  # Return None when data is unavailable - no placeholder data
+
+    def _fetch_alpha_vantage_fundamentals(self, ticker: str) -> Dict:
+        """Fetch fundamental data using Alpha Vantage API with Yahoo Finance fallback"""
+        try:
+            # Try Alpha Vantage first for premium beta data
+            alpha_data = self.api_client.get_alpha_vantage_fundamentals(ticker)
+            if alpha_data:
+                # Add company name and sector from Yahoo Finance if needed
+                try:
+                    stock = yf.Ticker(ticker)
+                    info = stock.info
+                    alpha_data['company_name'] = info.get('longName', ticker)
+                    alpha_data['sector'] = info.get('sector', 'Technology')
+                except:
+                    alpha_data['company_name'] = ticker
+                    alpha_data['sector'] = 'Technology'
+                
+                self.logger.info(f"Fetched Alpha Vantage fundamentals for {ticker}")
+                return alpha_data
+        except Exception as e:
+            self.logger.warning(f"Alpha Vantage failed for {ticker}: {str(e)}")
+        
+        # Fallback to Yahoo Finance
+        self.logger.info(f"Falling back to Yahoo Finance for {ticker}")
+        return self._fetch_yahoo_fundamentals(ticker)
 
     def _fetch_yahoo_fundamentals(self, ticker: str) -> Dict:
         """Fetch fundamental data using yfinance library"""
